@@ -29,6 +29,9 @@ var _dbg_last_underrun_usec := 0
 
 
 func _init() -> void:
+	_sample_rate = int(round(AudioServer.get_mix_rate()))
+	if _sample_rate <= 0:
+		_sample_rate = 48_000
 	mix_rate = _sample_rate
 	_set_voice_signal_enabled(true)
 

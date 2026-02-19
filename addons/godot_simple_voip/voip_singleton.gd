@@ -44,6 +44,8 @@ var _opus_frame_size := 960
 var _packet_duration_sec := 0.02
 var _input_sample_rate := 48_000
 var _input_packet_frames := 960
+var _output_sample_rate := 48_000
+var _output_packet_frames := 960
 
 var _voice_buffer: PackedVector2Array = []
 var _voice_read_pos := 0
@@ -114,8 +116,16 @@ func _ready() -> void:
 	_opus_sample_rate = _encode_opus.get_sample_rate()
 	_opus_frame_size = _encode_opus.get_frame_size()
 	_packet_duration_sec = float(_opus_frame_size) / float(_opus_sample_rate)
-	_input_sample_rate = int(AudioServer.get_mix_rate())
+	_input_sample_rate = int(round(AudioServer.get_input_mix_rate()))
+	if _input_sample_rate <= 0:
+		_input_sample_rate = int(round(AudioServer.get_mix_rate()))
+	if _input_sample_rate <= 0:
+		_input_sample_rate = _opus_sample_rate
 	_input_packet_frames = maxi(1, int(round(_input_sample_rate * _packet_duration_sec)))
+	_output_sample_rate = int(round(AudioServer.get_mix_rate()))
+	if _output_sample_rate <= 0:
+		_output_sample_rate = _opus_sample_rate
+	_output_packet_frames = maxi(1, int(round(_output_sample_rate * _packet_duration_sec)))
 	_setup_bus()
 	_track_existing_players()
 	get_tree().node_added.connect(_on_node_added)
@@ -259,7 +269,7 @@ func _refresh_stream_bindings() -> void:
 			continue
 
 		var stream := player.stream as AudioStreamVOIP
-		stream.configure_stream(_opus_sample_rate, _opus_frame_size)
+		stream.configure_stream(_output_sample_rate, _output_packet_frames)
 		stream.bind_playback(playback)
 		stream.pump_playback()
 
@@ -324,19 +334,20 @@ func _send_next_packet() -> void:
 	_voice_read_pos = to
 	_compact_voice_buffer_if_needed()
 
-	var opus_packet_pcm := _resample_to_network_packet(input_chunk)
-	if opus_packet_pcm.size() != _opus_frame_size:
-		return
-
-	_track_send_level(opus_packet_pcm)
+	_track_send_level(input_chunk)
 	var seq := _next_send_seq
 	_next_send_seq += 1
 
 	if use_opus_compression:
-		var opus_data := _encode_opus.encode(opus_packet_pcm)
+		var opus_data: PackedByteArray = _encode_opus.encode_with_sample_rate(input_chunk, _input_sample_rate)
+		if opus_data.is_empty():
+			return
 		_stats_sent_bytes += opus_data.size()
 		_send_voice_bytes(seq, opus_data)
 	else:
+		var opus_packet_pcm := _resample_to_network_packet(input_chunk)
+		if opus_packet_pcm.size() != _opus_frame_size:
+			return
 		_stats_sent_bytes += opus_packet_pcm.size() * 8
 		_send_voice_pcm(seq, opus_packet_pcm)
 
@@ -410,7 +421,7 @@ func _rpc_server_receive_voice_bytes(seq: int, opus_data: PackedByteArray) -> vo
 
 	# Play remote client voice on server, if server has matching AudioStreamVOIP players.
 	var decoder := _get_decoder_for_peer(sender_id)
-	var pcm_data := decoder.decode(opus_data)
+	var pcm_data: PackedVector2Array = decoder.decode_with_sample_rate(opus_data, _output_sample_rate)
 	_track_recv_level(pcm_data)
 	_stats_decoded_packets += 1
 	peer_voice_data_received.emit(sender_id, pcm_data)
@@ -432,7 +443,7 @@ func _rpc_client_receive_voice_bytes(sender_id: int, seq: int, opus_data: Packed
 	_mark_recv_timing()
 	_track_recv_sequence(sender_id, seq)
 	var decoder := _get_decoder_for_peer(sender_id)
-	var pcm_data := decoder.decode(opus_data)
+	var pcm_data: PackedVector2Array = decoder.decode_with_sample_rate(opus_data, _output_sample_rate)
 	_track_recv_level(pcm_data)
 	_stats_decoded_packets += 1
 	peer_voice_data_received.emit(sender_id, pcm_data)
@@ -515,9 +526,10 @@ func _rpc_server_receive_voice_pcm(seq: int, pcm_data: PackedVector2Array) -> vo
 	_stats_server_received_packets += 1
 	_mark_recv_timing()
 	_track_recv_sequence(sender_id, seq)
-	_track_recv_level(pcm_data)
+	var local_pcm_data := _resample_from_network_packet(pcm_data)
+	_track_recv_level(local_pcm_data)
 
-	peer_voice_data_received.emit(sender_id, pcm_data)
+	peer_voice_data_received.emit(sender_id, local_pcm_data)
 	_stats_emitted_packets += 1
 
 	for peer_id in multiplayer.get_peers():
@@ -532,9 +544,23 @@ func _rpc_client_receive_voice_pcm(sender_id: int, seq: int, pcm_data: PackedVec
 	_stats_client_received_packets += 1
 	_mark_recv_timing()
 	_track_recv_sequence(sender_id, seq)
-	_track_recv_level(pcm_data)
-	peer_voice_data_received.emit(sender_id, pcm_data)
+	var local_pcm_data := _resample_from_network_packet(pcm_data)
+	_track_recv_level(local_pcm_data)
+	peer_voice_data_received.emit(sender_id, local_pcm_data)
 	_stats_emitted_packets += 1
+
+
+func _resample_from_network_packet(network_frames: PackedVector2Array) -> PackedVector2Array:
+	if _output_sample_rate == _opus_sample_rate:
+		return network_frames
+
+	var resampled := _resampler.resample(network_frames, _opus_sample_rate, _output_sample_rate)
+	if resampled.size() != _output_packet_frames:
+		var exact := resampled.duplicate()
+		exact.resize(_output_packet_frames)
+		return exact
+
+	return resampled
 
 
 func get_debug_stats_snapshot() -> Dictionary:
