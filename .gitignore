@@ -4,8 +4,8 @@
 /target/
 
 # Rust build artifacts
-/src/target/
-/src/Cargo.lock
+/rust/target/
+/rust/Cargo.lock
 
 # Generated addon binaries (release assets)
 /addons/godot_simple_voip/bin/
