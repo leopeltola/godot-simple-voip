@@ -1,0 +1,61 @@
+name: Release Godot Addon
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Rust release library
+        run: cargo build --release --manifest-path rust/Cargo.toml
+
+      - name: Package Godot addon
+        id: package
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $archiveName = "godot-simple-voip-$tag.zip"
+          $packageRoot = "godot-simple-voip-$tag"
+          $stagingDir = Join-Path $env:RUNNER_TEMP $packageRoot
+          $addonDir = Join-Path $stagingDir "addons/godot_simple_voip"
+
+          New-Item -ItemType Directory -Path $addonDir -Force | Out-Null
+
+          Copy-Item -Path "addons/godot_simple_voip/*" -Destination $addonDir -Recurse -Force
+          Copy-Item -Path "rust/target/release/simple_voip.dll" -Destination (Join-Path $addonDir "bin/simple_voip_release.dll") -Force
+
+          if (Test-Path "LICENSE") {
+            Copy-Item -Path "LICENSE" -Destination $stagingDir -Force
+          }
+
+          $archivePath = Join-Path $env:GITHUB_WORKSPACE $archiveName
+          if (Test-Path $archivePath) {
+            Remove-Item -Path $archivePath -Force
+          }
+
+          Compress-Archive -Path "$stagingDir/*" -DestinationPath $archivePath
+
+          "archive_path=$archivePath" >> $env:GITHUB_OUTPUT
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Godot Simple VOIP ${{ github.ref_name }}
+          generate_release_notes: true
+          files: ${{ steps.package.outputs.archive_path }}

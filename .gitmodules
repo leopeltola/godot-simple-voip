@@ -1,3 +1,3 @@
 [submodule "rust/DeepFilterNet"]
 	path = rust/DeepFilterNet
-	url = https://github.com/Rikorose/DeepFilterNet.git
+	url = https://github.com/leopeltola/DeepFilterNet.git
