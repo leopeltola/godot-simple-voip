@@ -26,6 +26,18 @@ const BUS_NAME = "VOIP"
 ## Emit stage-isolation telemetry once per second.
 @export var debug_stage_isolation := true
 
+## Runtime-tweakable voice processing effect settings.
+@export var high_pass_enabled := true
+@export_range(20.0, 2000.0, 1.0) var high_pass_cutoff_hz := 100.0
+@export var low_pass_enabled := true
+@export_range(1000.0, 22000.0, 10.0) var low_pass_cutoff_hz := 16000.0
+@export var rnnoise_enabled := true
+@export var compressor_enabled := true
+@export_range(-60.0, 0.0, 0.1) var compressor_threshold_db := -7.0
+@export var amplify_enabled := true
+@export_range(-24.0, 24.0, 0.1) var amplify_db := 7.0
+@export var limiter_enabled := true
+
 ## Max number of voice packets to send in a single frame when catching up
 ## after frame hitches or background throttling.
 @export var max_packets_per_frame := 64
@@ -36,6 +48,12 @@ const BUS_NAME = "VOIP"
 
 var _bus_idx := -1
 var _capture: AudioEffectCapture = null
+var _high_pass: AudioEffectHighPassFilter = null
+var _low_pass: AudioEffectLowPassFilter = null
+var _rnnoise: AudioEffectRNNoise = null
+var _compressor: AudioEffectCompressor = null
+var _amplify: AudioEffectAmplify = null
+var _limiter: AudioEffectHardLimiter = null
 var _encode_opus: OpusCodec
 var _decode_opus_by_peer: Dictionary = {}
 var _resampler: Resampler
@@ -145,6 +163,8 @@ func _setup_bus() -> void:
 	if _bus_idx != -1:
 		# Bus exists, verify it has capture
 		_verify_and_add_capture()
+		_cache_existing_effects()
+		_apply_runtime_effect_config()
 		return
 	
 	# Create new bus if it doesn't exist
@@ -155,31 +175,31 @@ func _setup_bus() -> void:
 	# Add audio effects to process voice
 	
 	# Remove constant noise from the background
-	var high_pass := AudioEffectHighPassFilter.new()
-	high_pass.cutoff_hz = 100.0
-	AudioServer.add_bus_effect(_bus_idx, high_pass)
+	_high_pass = AudioEffectHighPassFilter.new()
+	_high_pass.cutoff_hz = high_pass_cutoff_hz
+	AudioServer.add_bus_effect(_bus_idx, _high_pass)
 	
-	var low_pass := AudioEffectLowPassFilter.new()
-	low_pass.cutoff_hz = 16000.0
-	AudioServer.add_bus_effect(_bus_idx, low_pass)
+	_low_pass = AudioEffectLowPassFilter.new()
+	_low_pass.cutoff_hz = low_pass_cutoff_hz
+	AudioServer.add_bus_effect(_bus_idx, _low_pass)
 	
 	# Remove noise using neural network
-	var rnnoise := AudioEffectRNNoise.new()
-	AudioServer.add_bus_effect(_bus_idx, rnnoise)
+	_rnnoise = AudioEffectRNNoise.new()
+	AudioServer.add_bus_effect(_bus_idx, _rnnoise)
 	
 	# Compress the louder sounds to be quieter
-	var compressor := AudioEffectCompressor.new()
-	compressor.threshold = -7
-	AudioServer.add_bus_effect(_bus_idx, compressor)
+	_compressor = AudioEffectCompressor.new()
+	_compressor.threshold = compressor_threshold_db
+	AudioServer.add_bus_effect(_bus_idx, _compressor)
 	
 	# Amplify everything to offset the compression
-	var amplify := AudioEffectAmplify.new()
-	amplify.volume_db = 7.0
-	AudioServer.add_bus_effect(_bus_idx, amplify)
+	_amplify = AudioEffectAmplify.new()
+	_amplify.volume_db = amplify_db
+	AudioServer.add_bus_effect(_bus_idx, _amplify)
 	
 	# Ensure no clipping
-	var limiter := AudioEffectHardLimiter.new()
-	AudioServer.add_bus_effect(_bus_idx, limiter)
+	_limiter = AudioEffectHardLimiter.new()
+	AudioServer.add_bus_effect(_bus_idx, _limiter)
 	
 	# For capturing the mic input
 	_capture = AudioEffectCapture.new()
@@ -190,6 +210,8 @@ func _setup_bus() -> void:
 	var silence := AudioEffectAmplify.new()
 	silence.volume_db = -70.0
 	AudioServer.add_bus_effect(_bus_idx, silence)
+
+	_apply_runtime_effect_config()
 
 
 func _verify_and_add_capture() -> void:
@@ -204,6 +226,104 @@ func _verify_and_add_capture() -> void:
 	_capture = AudioEffectCapture.new()
 	_capture.buffer_length = capture_buffer_length_sec
 	AudioServer.add_bus_effect(_bus_idx, _capture)
+
+
+func _cache_existing_effects() -> void:
+	_high_pass = null
+	_low_pass = null
+	_rnnoise = null
+	_compressor = null
+	_amplify = null
+	_limiter = null
+
+	for i in range(AudioServer.get_bus_effect_count(_bus_idx)):
+		var effect := AudioServer.get_bus_effect(_bus_idx, i)
+		if effect is AudioEffectHighPassFilter and _high_pass == null:
+			_high_pass = effect as AudioEffectHighPassFilter
+		elif effect is AudioEffectLowPassFilter and _low_pass == null:
+			_low_pass = effect as AudioEffectLowPassFilter
+		elif effect is AudioEffectRNNoise and _rnnoise == null:
+			_rnnoise = effect as AudioEffectRNNoise
+		elif effect is AudioEffectCompressor and _compressor == null:
+			_compressor = effect as AudioEffectCompressor
+		elif effect is AudioEffectAmplify:
+			var amp := effect as AudioEffectAmplify
+			if _amplify == null or amp.volume_db > _amplify.volume_db:
+				_amplify = amp
+		elif effect is AudioEffectHardLimiter and _limiter == null:
+			_limiter = effect as AudioEffectHardLimiter
+
+
+func get_effect_runtime_config() -> Dictionary:
+	return {
+		"high_pass_enabled": high_pass_enabled,
+		"high_pass_cutoff_hz": high_pass_cutoff_hz,
+		"low_pass_enabled": low_pass_enabled,
+		"low_pass_cutoff_hz": low_pass_cutoff_hz,
+		"rnnoise_enabled": rnnoise_enabled,
+		"compressor_enabled": compressor_enabled,
+		"compressor_threshold_db": compressor_threshold_db,
+		"amplify_enabled": amplify_enabled,
+		"amplify_db": amplify_db,
+		"limiter_enabled": limiter_enabled,
+	}
+
+
+func set_effect_runtime_config(config: Dictionary) -> void:
+	high_pass_enabled = bool(config.get("high_pass_enabled", high_pass_enabled))
+	high_pass_cutoff_hz = float(config.get("high_pass_cutoff_hz", high_pass_cutoff_hz))
+	low_pass_enabled = bool(config.get("low_pass_enabled", low_pass_enabled))
+	low_pass_cutoff_hz = float(config.get("low_pass_cutoff_hz", low_pass_cutoff_hz))
+	rnnoise_enabled = bool(config.get("rnnoise_enabled", rnnoise_enabled))
+	compressor_enabled = bool(config.get("compressor_enabled", compressor_enabled))
+	compressor_threshold_db = float(config.get("compressor_threshold_db", compressor_threshold_db))
+	amplify_enabled = bool(config.get("amplify_enabled", amplify_enabled))
+	amplify_db = float(config.get("amplify_db", amplify_db))
+	limiter_enabled = bool(config.get("limiter_enabled", limiter_enabled))
+	_apply_runtime_effect_config()
+
+
+func _apply_runtime_effect_config() -> void:
+	if _bus_idx == -1:
+		return
+
+	high_pass_cutoff_hz = clampf(high_pass_cutoff_hz, 20.0, 2000.0)
+	low_pass_cutoff_hz = clampf(low_pass_cutoff_hz, 1000.0, 22000.0)
+	compressor_threshold_db = clampf(compressor_threshold_db, -60.0, 0.0)
+	amplify_db = clampf(amplify_db, -24.0, 24.0)
+
+	if _high_pass != null:
+		_high_pass.cutoff_hz = high_pass_cutoff_hz
+		_set_effect_enabled(_high_pass, high_pass_enabled)
+	if _low_pass != null:
+		_low_pass.cutoff_hz = low_pass_cutoff_hz
+		_set_effect_enabled(_low_pass, low_pass_enabled)
+	if _rnnoise != null:
+		_set_effect_enabled(_rnnoise, rnnoise_enabled)
+	if _compressor != null:
+		_compressor.threshold = compressor_threshold_db
+		_set_effect_enabled(_compressor, compressor_enabled)
+	if _amplify != null:
+		_amplify.volume_db = amplify_db
+		_set_effect_enabled(_amplify, amplify_enabled)
+	if _limiter != null:
+		_set_effect_enabled(_limiter, limiter_enabled)
+
+
+func _set_effect_enabled(effect: AudioEffect, enabled: bool) -> void:
+	var idx := _find_effect_index(effect)
+	if idx == -1:
+		return
+	AudioServer.set_bus_effect_enabled(_bus_idx, idx, enabled)
+
+
+func _find_effect_index(effect: AudioEffect) -> int:
+	if effect == null or _bus_idx == -1:
+		return -1
+	for i in range(AudioServer.get_bus_effect_count(_bus_idx)):
+		if AudioServer.get_bus_effect(_bus_idx, i) == effect:
+			return i
+	return -1
 
 
 func _process(delta: float) -> void:

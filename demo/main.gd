@@ -8,6 +8,20 @@ const PORT := 25562
 @onready var _host_button: Button = %HostButton
 @onready var _disconnect_button: Button = %DisconnectButton
 @onready var _opus_toggle: CheckBox = %OpusToggle
+@onready var _high_pass_enabled: CheckBox = %HighPassEnabled
+@onready var _high_pass_cutoff: HSlider = %HighPassCutoff
+@onready var _high_pass_value: Label = %HighPassValue
+@onready var _low_pass_enabled: CheckBox = %LowPassEnabled
+@onready var _low_pass_cutoff: HSlider = %LowPassCutoff
+@onready var _low_pass_value: Label = %LowPassValue
+@onready var _rnnoise_enabled: CheckBox = %RNNoiseEnabled
+@onready var _compressor_enabled: CheckBox = %CompressorEnabled
+@onready var _compressor_threshold: HSlider = %CompressorThreshold
+@onready var _compressor_value: Label = %CompressorValue
+@onready var _amplify_enabled: CheckBox = %AmplifyEnabled
+@onready var _amplify_db: HSlider = %AmplifyDb
+@onready var _amplify_value: Label = %AmplifyValue
+@onready var _limiter_enabled: CheckBox = %LimiterEnabled
 @onready var _status_label: Label = %StatusLabel
 @onready var _peers_label: Label = %PeersLabel
 @onready var _log_label: RichTextLabel = %LogLabel
@@ -20,6 +34,7 @@ func _ready() -> void:
 	_wire_ui()
 	_wire_multiplayer_signals()
 	_setup_opus_toggle()
+	_setup_effect_controls()
 	_log_audio_rate_info()
 	_setup_voip_stats_logging()
 	_warn_if_low_processor_mode()
@@ -79,6 +94,101 @@ func _setup_opus_toggle() -> void:
 
 	_opus_toggle.button_pressed = VOIP.use_opus_compression
 	_log("Opus compression: %s" % (_mode_text(VOIP.use_opus_compression)))
+
+
+func _setup_effect_controls() -> void:
+	if not has_node("/root/VOIP"):
+		_set_effect_controls_enabled(false)
+		return
+
+	var config := VOIP.get_effect_runtime_config()
+	_high_pass_enabled.button_pressed = bool(config.get("high_pass_enabled", true))
+	_high_pass_cutoff.value = float(config.get("high_pass_cutoff_hz", 100.0))
+	_low_pass_enabled.button_pressed = bool(config.get("low_pass_enabled", true))
+	_low_pass_cutoff.value = float(config.get("low_pass_cutoff_hz", 16000.0))
+	_rnnoise_enabled.button_pressed = bool(config.get("rnnoise_enabled", true))
+	_compressor_enabled.button_pressed = bool(config.get("compressor_enabled", true))
+	_compressor_threshold.value = float(config.get("compressor_threshold_db", -7.0))
+	_amplify_enabled.button_pressed = bool(config.get("amplify_enabled", true))
+	_amplify_db.value = float(config.get("amplify_db", 7.0))
+	_limiter_enabled.button_pressed = bool(config.get("limiter_enabled", true))
+
+	_high_pass_enabled.toggled.connect(_on_effect_control_changed)
+	_low_pass_enabled.toggled.connect(_on_effect_control_changed)
+	_rnnoise_enabled.toggled.connect(_on_effect_control_changed)
+	_compressor_enabled.toggled.connect(_on_effect_control_changed)
+	_amplify_enabled.toggled.connect(_on_effect_control_changed)
+	_limiter_enabled.toggled.connect(_on_effect_control_changed)
+
+	_high_pass_cutoff.value_changed.connect(_on_high_pass_changed)
+	_low_pass_cutoff.value_changed.connect(_on_low_pass_changed)
+	_compressor_threshold.value_changed.connect(_on_compressor_threshold_changed)
+	_amplify_db.value_changed.connect(_on_amplify_changed)
+
+	_refresh_effect_value_labels()
+	_set_effect_controls_enabled(true)
+
+
+func _set_effect_controls_enabled(enabled: bool) -> void:
+	_high_pass_enabled.disabled = not enabled
+	_high_pass_cutoff.editable = enabled
+	_low_pass_enabled.disabled = not enabled
+	_low_pass_cutoff.editable = enabled
+	_rnnoise_enabled.disabled = not enabled
+	_compressor_enabled.disabled = not enabled
+	_compressor_threshold.editable = enabled
+	_amplify_enabled.disabled = not enabled
+	_amplify_db.editable = enabled
+	_limiter_enabled.disabled = not enabled
+
+
+func _on_effect_control_changed(_enabled: bool) -> void:
+	_push_effect_runtime_config()
+
+
+func _on_high_pass_changed(_value: float) -> void:
+	_refresh_effect_value_labels()
+	_push_effect_runtime_config()
+
+
+func _on_low_pass_changed(_value: float) -> void:
+	_refresh_effect_value_labels()
+	_push_effect_runtime_config()
+
+
+func _on_compressor_threshold_changed(_value: float) -> void:
+	_refresh_effect_value_labels()
+	_push_effect_runtime_config()
+
+
+func _on_amplify_changed(_value: float) -> void:
+	_refresh_effect_value_labels()
+	_push_effect_runtime_config()
+
+
+func _refresh_effect_value_labels() -> void:
+	_high_pass_value.text = "%d Hz" % int(round(_high_pass_cutoff.value))
+	_low_pass_value.text = "%d Hz" % int(round(_low_pass_cutoff.value))
+	_compressor_value.text = "%.1f dB" % _compressor_threshold.value
+	_amplify_value.text = "%.1f dB" % _amplify_db.value
+
+
+func _push_effect_runtime_config() -> void:
+	if not has_node("/root/VOIP"):
+		return
+
+	VOIP.set_effect_runtime_config({
+		"high_pass_enabled": _high_pass_enabled.button_pressed,
+		"high_pass_cutoff_hz": _high_pass_cutoff.value,
+		"low_pass_enabled": _low_pass_enabled.button_pressed,
+		"low_pass_cutoff_hz": _low_pass_cutoff.value,
+		"rnnoise_enabled": _rnnoise_enabled.button_pressed,
+		"compressor_enabled": _compressor_enabled.button_pressed,
+		"compressor_threshold_db": _compressor_threshold.value,
+		"amplify_enabled": _amplify_enabled.button_pressed,
+		"amplify_db": _amplify_db.value,
+		"limiter_enabled": _limiter_enabled.button_pressed,
+	})
 
 
 func _setup_voip_stats_logging() -> void:
