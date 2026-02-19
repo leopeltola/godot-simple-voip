@@ -1,0 +1,11 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+/target/
+
+# Rust build artifacts
+/src/target/
+/src/Cargo.lock
+
+# Generated addon binaries (release assets)
+/addons/godot_simple_voip/bin/

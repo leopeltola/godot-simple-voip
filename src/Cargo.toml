@@ -1,0 +1,13 @@
+[package]
+name = "simple_voip" # Part of dynamic library name; we use {YourCrate} placeholder.
+version = "0.1.0"     # You can leave version and edition as-is for now.
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+deep_filter = "0.2.5"
+godot = {version = "0.3.4", features = ["experimental-threads", "register-docs"]}
+nnnoiseless = "0.5.1"
+opus = "0.3.0"

@@ -1,0 +1,2 @@
+extends AudioStreamGeneratorPlayback
+class_name AudioStreamVOIPPlayBack

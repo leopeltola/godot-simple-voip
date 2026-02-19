@@ -1,0 +1,8 @@
+[configuration]
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = 4.1
+reloadable = true
+
+[libraries]
+windows.debug.x86_64 =   "res://addons/godot_simple_voip/bin/simple_voip.dll"
+windows.release.x86_64 = "res://addons/godot_simple_voip/bin/simple_voip_release.dll"
