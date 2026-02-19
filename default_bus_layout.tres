@@ -30,7 +30,7 @@ resource_name = "Amplify"
 volume_db = -80.0
 
 [resource]
-bus/0/volume_db = -14.6228
+bus/0/volume_db = 0.464998
 bus/0/send = &"New Bus 2"
 bus/0/effect/0/effect = SubResource("AudioEffectHardLimiter_g28q7")
 bus/0/effect/0/enabled = true

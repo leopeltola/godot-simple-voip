@@ -3,6 +3,9 @@
 /android/
 /target/
 
+# Godot export dir
+/bin/
+
 # Rust build artifacts
 /rust/target/
 /rust/Cargo.lock

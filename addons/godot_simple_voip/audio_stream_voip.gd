@@ -12,6 +12,7 @@ class_name AudioStreamVOIP
 
 var _playback: AudioStreamGeneratorPlayback = null
 var _pending_frames: PackedVector2Array = PackedVector2Array()
+var _pending_read_pos := 0
 var _started := false
 var _sample_rate := 48_000
 var _frame_size := 960
@@ -56,19 +57,20 @@ func _on_voice_data(speaker_peer_id: int, pcm_data: PackedVector2Array) -> void:
 		return
 
 	_pending_frames.append_array(pcm_data)
-	if _pending_frames.size() > _max_pending_frames:
+	if _pending_available() > _max_pending_frames:
 		# Keep latency bounded if we ever fall behind.
-		_pending_frames = _pending_frames.slice(_pending_frames.size() - _max_pending_frames)
+		_pending_read_pos = _pending_frames.size() - _max_pending_frames
+		_compact_pending_if_needed()
 
 	_flush_pending_to_playback()
 
 
 func _flush_pending_to_playback() -> void:
-	if _playback == null or _pending_frames.is_empty():
+	if _playback == null or _pending_available() <= 0:
 		return
 
 	if not _started:
-		if _pending_frames.size() < _start_buffer_frames:
+		if _pending_available() < _start_buffer_frames:
 			return
 		_started = true
 
@@ -76,17 +78,16 @@ func _flush_pending_to_playback() -> void:
 	if frames_available <= 0:
 		return
 
-	var to_push := mini(frames_available, _pending_frames.size())
+	var available_pending := _pending_available()
+	var to_push := mini(frames_available, available_pending)
 	if to_push <= 0:
 		return
 
 	for i in range(to_push):
-		_playback.push_frame(_pending_frames[i])
+		_playback.push_frame(_pending_frames[_pending_read_pos + i])
 
-	if to_push == _pending_frames.size():
-		_pending_frames.clear()
-	else:
-		_pending_frames = _pending_frames.slice(to_push)
+	_pending_read_pos += to_push
+	_compact_pending_if_needed()
 
 
 func _set_voice_signal_enabled(enabled: bool) -> void:
@@ -117,3 +118,16 @@ func _get_voip_singleton() -> Node:
 		return null
 
 	return tree.root.get_node("VOIP")
+
+
+func _pending_available() -> int:
+	return _pending_frames.size() - _pending_read_pos
+
+
+func _compact_pending_if_needed() -> void:
+	if _pending_read_pos <= 0:
+		return
+
+	if _pending_read_pos >= 4096 or _pending_read_pos * 2 >= _pending_frames.size():
+		_pending_frames = _pending_frames.slice(_pending_read_pos)
+		_pending_read_pos = 0

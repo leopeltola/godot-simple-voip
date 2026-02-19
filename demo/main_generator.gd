@@ -1,6 +1,5 @@
 extends Control
 
-
 const PORT := 25562
 
 @onready var _ip_edit: LineEdit = %IpEdit
@@ -12,34 +11,65 @@ const PORT := 25562
 @onready var _peers_label: Label = %PeersLabel
 @onready var _log_label: RichTextLabel = %LogLabel
 
-var _voip_players: Dictionary = {}
 var _mic_player: AudioStreamPlayer = null
+var _peer_audio: Dictionary = {}
+
+var _sample_rate := 48_000
+var _frame_size := 960
+var _start_buffer_frames := 2_880
 
 
 func _ready() -> void:
 	_wire_ui()
 	_wire_multiplayer_signals()
+	_setup_voip()
 	_setup_opus_toggle()
-	_log_audio_rate_info()
 	_setup_voip_stats_logging()
 	_warn_if_low_processor_mode()
 	_apply_cli_mute_if_requested()
 	_setup_microphone_capture()
 	_set_status("Idle")
 	_update_peer_count()
-	_log("Demo ready. Host or join to start VOIP.")
+	_log("Generator demo ready. Host or join to start VOIP.")
 
 
-func _log_audio_rate_info() -> void:
+func _process(_delta: float) -> void:
+	for peer_id in _peer_audio.keys():
+		_flush_peer_audio(peer_id)
+
+
+func _wire_ui() -> void:
+	_join_button.pressed.connect(_on_join_pressed)
+	_host_button.pressed.connect(_on_host_pressed)
+	_disconnect_button.pressed.connect(_on_disconnect_pressed)
+	_opus_toggle.toggled.connect(_on_opus_toggled)
+
+
+func _wire_multiplayer_signals() -> void:
+	multiplayer.connected_to_server.connect(_on_connected_to_server)
+	multiplayer.connection_failed.connect(_on_connection_failed)
+	multiplayer.server_disconnected.connect(_on_server_disconnected)
+	multiplayer.peer_connected.connect(_on_peer_connected)
+	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+
+
+func _setup_voip() -> void:
+	if not has_node("/root/VOIP"):
+		_log_error("VOIP singleton not found. Enable the plugin first.")
+		_opus_toggle.disabled = true
+		return
+
+	_sample_rate = VOIP.get_opus_sample_rate()
+	_frame_size = VOIP.get_opus_frame_size()
+	_start_buffer_frames = _frame_size * 3
+
+	if not VOIP.peer_voice_data_received.is_connected(_on_peer_voice_data_received):
+		VOIP.peer_voice_data_received.connect(_on_peer_voice_data_received)
+
 	var runtime_mix := int(AudioServer.get_mix_rate())
 	var project_mix := int(ProjectSettings.get_setting("audio/driver/mix_rate", runtime_mix))
-	if has_node("/root/VOIP"):
-		var opus_rate := VOIP.get_opus_sample_rate()
-		var opus_frame := VOIP.get_opus_frame_size()
-		var packet_ms := (float(opus_frame) / float(opus_rate)) * 1000.0
-		_log("Audio rates -> AudioServer: %d Hz, ProjectSetting: %d Hz, Opus: %d Hz, frame: %d (%.2f ms)" % [runtime_mix, project_mix, opus_rate, opus_frame, packet_ms])
-	else:
-		_log("Audio rates -> AudioServer: %d Hz, ProjectSetting: %d Hz" % [runtime_mix, project_mix])
+	var packet_ms := (float(_frame_size) / float(_sample_rate)) * 1000.0
+	_log("Audio rates -> AudioServer: %d Hz, ProjectSetting: %d Hz, Opus: %d Hz, frame: %d (%.2f ms)" % [runtime_mix, project_mix, _sample_rate, _frame_size, packet_ms])
 
 
 func _warn_if_low_processor_mode() -> void:
@@ -51,34 +81,13 @@ func _warn_if_low_processor_mode() -> void:
 		_log_error("Project setting application/run/low_processor_mode is ON. Background instance may starve VOIP and cause pops.")
 
 
-func _apply_cli_mute_if_requested() -> void:
-	var args := OS.get_cmdline_args()
-	if not args.has("--mute"):
-		return
-
-	var master_idx := AudioServer.get_bus_index("Master")
-	if master_idx == -1:
-		_log_error("--mute requested, but Master bus was not found.")
-		return
-
-	AudioServer.set_bus_volume_db(master_idx, -80.0)
-	_log("--mute detected: Master bus volume set to -80 dB.")
-
-
-func _wire_ui() -> void:
-	_join_button.pressed.connect(_on_join_pressed)
-	_host_button.pressed.connect(_on_host_pressed)
-	_disconnect_button.pressed.connect(_on_disconnect_pressed)
-	_opus_toggle.toggled.connect(_on_opus_toggled)
-
-
 func _setup_opus_toggle() -> void:
 	if not has_node("/root/VOIP"):
 		_opus_toggle.disabled = true
 		return
 
 	_opus_toggle.button_pressed = VOIP.use_opus_compression
-	_log("Opus compression: %s" % (_mode_text(VOIP.use_opus_compression)))
+	_log("Opus compression: %s" % _mode_text(VOIP.use_opus_compression))
 
 
 func _setup_voip_stats_logging() -> void:
@@ -106,17 +115,8 @@ func _on_voip_stats_updated(stats: Dictionary) -> void:
 	])
 
 
-func _wire_multiplayer_signals() -> void:
-	multiplayer.connected_to_server.connect(_on_connected_to_server)
-	multiplayer.connection_failed.connect(_on_connection_failed)
-	multiplayer.server_disconnected.connect(_on_server_disconnected)
-	multiplayer.peer_connected.connect(_on_peer_connected)
-	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-
-
 func _setup_microphone_capture() -> void:
 	if not has_node("/root/VOIP"):
-		_log_error("VOIP singleton not found. Enable the plugin first.")
 		return
 
 	_mic_player = AudioStreamPlayer.new()
@@ -126,6 +126,20 @@ func _setup_microphone_capture() -> void:
 	add_child(_mic_player)
 	_mic_player.play()
 	_log("Local microphone routed to VOIP bus.")
+
+
+func _apply_cli_mute_if_requested() -> void:
+	var args := OS.get_cmdline_args()
+	if not args.has("--mute"):
+		return
+
+	var master_idx := AudioServer.get_bus_index("Master")
+	if master_idx == -1:
+		_log_error("--mute requested, but Master bus was not found.")
+		return
+
+	AudioServer.set_bus_volume_db(master_idx, -80.0)
+	_log("--mute detected: Master bus volume set to -80 dB.")
 
 
 func _on_opus_toggled(enabled: bool) -> void:
@@ -187,7 +201,7 @@ func disconnect_current_peer(log_reason: bool = true) -> void:
 		multiplayer.multiplayer_peer.close()
 		multiplayer.multiplayer_peer = null
 
-	_clear_voip_players()
+	_clear_peer_audio()
 	_set_status("Disconnected")
 	_update_peer_count()
 	_update_connection_ui()
@@ -215,48 +229,113 @@ func _on_server_disconnected() -> void:
 
 
 func _on_peer_connected(peer_id: int) -> void:
-	_create_voip_player_for_peer(peer_id)
+	_ensure_peer_audio(peer_id)
 	_update_peer_count()
 	_log("Peer connected: %d" % peer_id)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
-	_remove_voip_player_for_peer(peer_id)
+	_remove_peer_audio(peer_id)
 	_update_peer_count()
 	_log("Peer disconnected: %d" % peer_id)
 
 
-func _create_voip_player_for_peer(peer_id: int) -> void:
-	if _voip_players.has(peer_id):
+func _on_peer_voice_data_received(peer_id: int, pcm_data: PackedVector2Array) -> void:
+	if pcm_data.is_empty():
 		return
+
+	_ensure_peer_audio(peer_id)
+	var info: Dictionary = _peer_audio[peer_id]
+	var pending: PackedVector2Array = info["pending"]
+	pending.append_array(pcm_data)
+	if pending.size() > _sample_rate:
+		pending = pending.slice(pending.size() - _sample_rate)
+	info["pending"] = pending
+	_peer_audio[peer_id] = info
+
+	_flush_peer_audio(peer_id)
+
+
+func _ensure_peer_audio(peer_id: int) -> void:
+	if _peer_audio.has(peer_id):
+		return
+
+	var stream := AudioStreamGenerator.new()
+	stream.mix_rate = _sample_rate
+	stream.buffer_length = 0.5
 
 	var player := AudioStreamPlayer.new()
-	player.name = "VOIPPeer_%d" % peer_id
-
-	var voip_stream := AudioStreamVOIP.new()
-	if has_node("/root/VOIP"):
-		voip_stream.configure_stream(VOIP.get_opus_sample_rate(), VOIP.get_opus_frame_size())
-	voip_stream.peer_id = peer_id
-	player.stream = voip_stream
-
+	player.name = "GENPeer_%d" % peer_id
+	player.stream = stream
 	add_child(player)
 	player.play()
-	_voip_players[peer_id] = player
+
+	var info := {
+		"player": player,
+		"playback": player.get_stream_playback(),
+		"pending": PackedVector2Array(),
+		"started": false,
+	}
+	_peer_audio[peer_id] = info
 
 
-func _remove_voip_player_for_peer(peer_id: int) -> void:
-	if not _voip_players.has(peer_id):
+func _flush_peer_audio(peer_id: int) -> void:
+	if not _peer_audio.has(peer_id):
 		return
 
-	var player: AudioStreamPlayer = _voip_players[peer_id]
-	_voip_players.erase(peer_id)
-	if is_instance_valid(player):
-		player.queue_free()
+	var info: Dictionary = _peer_audio[peer_id]
+	var player: AudioStreamPlayer = info["player"]
+	if not is_instance_valid(player):
+		_peer_audio.erase(peer_id)
+		return
+
+	var playback: AudioStreamGeneratorPlayback = info["playback"]
+	if playback == null:
+		playback = player.get_stream_playback()
+		if playback == null:
+			return
+		info["playback"] = playback
+
+	var pending: PackedVector2Array = info["pending"]
+	var started: bool = info["started"]
+
+	if pending.is_empty():
+		_peer_audio[peer_id] = info
+		return
+
+	if not started and pending.size() < _start_buffer_frames:
+		_peer_audio[peer_id] = info
+		return
+
+	started = true
+
+	var to_push := mini(playback.get_frames_available(), pending.size())
+	for i in range(to_push):
+		playback.push_frame(pending[i])
+
+	if to_push == pending.size():
+		pending.clear()
+	else:
+		pending = pending.slice(to_push)
+
+	info["pending"] = pending
+	info["started"] = started
+	_peer_audio[peer_id] = info
 
 
-func _clear_voip_players() -> void:
-	for peer_id in _voip_players.keys():
-		_remove_voip_player_for_peer(peer_id)
+func _remove_peer_audio(peer_id: int) -> void:
+	if not _peer_audio.has(peer_id):
+		return
+
+	var info: Dictionary = _peer_audio[peer_id]
+	_peer_audio.erase(peer_id)
+	if info.has("player") and is_instance_valid(info["player"]):
+		(info["player"] as AudioStreamPlayer).queue_free()
+
+
+func _clear_peer_audio() -> void:
+	for peer_id in _peer_audio.keys():
+		_remove_peer_audio(peer_id)
 
 
 func _update_peer_count() -> void:
@@ -282,3 +361,8 @@ func _log(message: String) -> void:
 func _log_error(message: String) -> void:
 	_log_label.append_text("[color=#FF8A8A]%s[/color]\n" % message)
 	_log_label.scroll_to_line(_log_label.get_line_count())
+
+
+func _exit_tree() -> void:
+	if has_node("/root/VOIP") and VOIP.peer_voice_data_received.is_connected(_on_peer_voice_data_received):
+		VOIP.peer_voice_data_received.disconnect(_on_peer_voice_data_received)
