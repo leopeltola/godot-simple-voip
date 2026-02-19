@@ -9,6 +9,8 @@ use godot::classes::{
 use godot::{classes::native::AudioFrame, prelude::*};
 use ndarray::Array2;
 
+const MAX_DFN_CHUNKS_PER_CALLBACK: usize = 1;
+
 #[derive(Debug, Clone)]
 struct DeepFilterParams {
     atten_lim_db: f32,
@@ -270,7 +272,10 @@ impl IAudioEffectInstance for AudioEffectDeepFilterNetInstance {
             self.input_buffer.drain(..overflow);
         }
 
-        while self.input_buffer.len() >= self.hop_size {
+        let mut processed_chunks_this_callback = 0usize;
+        while self.input_buffer.len() >= self.hop_size
+            && processed_chunks_this_callback < MAX_DFN_CHUNKS_PER_CALLBACK
+        {
             let chunk = &self.input_buffer[..self.hop_size];
 
             {
@@ -335,6 +340,7 @@ impl IAudioEffectInstance for AudioEffectDeepFilterNetInstance {
             }
 
             self.input_buffer.drain(..self.hop_size);
+            processed_chunks_this_callback += 1;
         }
 
         let mut out_index = 0usize;
