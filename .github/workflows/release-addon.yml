@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and publish (example: v0.3.2)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -11,11 +17,14 @@ permissions:
 jobs:
   build-and-release:
     runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ env.RELEASE_TAG }}
           submodules: recursive
 
       - name: Install Rust
@@ -28,16 +37,24 @@ jobs:
         id: package
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = "${{ env.RELEASE_TAG }}"
           $archiveName = "godot-simple-voip-$tag.zip"
           $packageRoot = "godot-simple-voip-$tag"
           $stagingDir = Join-Path $env:RUNNER_TEMP $packageRoot
           $addonDir = Join-Path $stagingDir "addons/godot_simple_voip"
+          $addonBinDir = Join-Path $addonDir "bin"
+          $releaseDll = "rust/target/release/simple_voip.dll"
 
           New-Item -ItemType Directory -Path $addonDir -Force | Out-Null
+          New-Item -ItemType Directory -Path $addonBinDir -Force | Out-Null
 
           Copy-Item -Path "addons/godot_simple_voip/*" -Destination $addonDir -Recurse -Force
-          Copy-Item -Path "rust/target/release/simple_voip.dll" -Destination (Join-Path $addonDir "bin/simple_voip_release.dll") -Force
+
+          if (-not (Test-Path $releaseDll)) {
+            throw "Expected release DLL not found at '$releaseDll'"
+          }
+
+          Copy-Item -Path $releaseDll -Destination (Join-Path $addonBinDir "simple_voip_release.dll") -Force
 
           if (Test-Path "LICENSE") {
             Copy-Item -Path "LICENSE" -Destination $stagingDir -Force
@@ -55,7 +72,7 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Godot Simple VOIP ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Godot Simple VOIP ${{ env.RELEASE_TAG }}
           generate_release_notes: true
           files: ${{ steps.package.outputs.archive_path }}
