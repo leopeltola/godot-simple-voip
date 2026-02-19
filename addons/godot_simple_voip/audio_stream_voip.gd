@@ -19,6 +19,14 @@ var _frame_size := 960
 var _start_buffer_frames := 2_880
 var _max_pending_frames := 48_000
 
+var _dbg_chunks_received := 0
+var _dbg_frames_received := 0
+var _dbg_frames_pushed := 0
+var _dbg_pending_drop_frames := 0
+var _dbg_playback_start_count := 0
+var _dbg_underrun_events := 0
+var _dbg_last_underrun_usec := 0
+
 
 func _init() -> void:
 	mix_rate = _sample_rate
@@ -56,23 +64,37 @@ func _on_voice_data(speaker_peer_id: int, pcm_data: PackedVector2Array) -> void:
 	if speaker_peer_id != peer_id or not pcm_data:
 		return
 
+	_dbg_chunks_received += 1
+	_dbg_frames_received += pcm_data.size()
+
 	_pending_frames.append_array(pcm_data)
 	if _pending_available() > _max_pending_frames:
 		# Keep latency bounded if we ever fall behind.
+		var before_drop := _pending_available()
 		_pending_read_pos = _pending_frames.size() - _max_pending_frames
+		_dbg_pending_drop_frames += max(0, before_drop - _max_pending_frames)
 		_compact_pending_if_needed()
 
 	_flush_pending_to_playback()
 
 
 func _flush_pending_to_playback() -> void:
-	if _playback == null or _pending_available() <= 0:
+	if _playback == null:
+		return
+
+	if _pending_available() <= 0:
+		if _started:
+			var now_usec := Time.get_ticks_usec()
+			if now_usec - _dbg_last_underrun_usec >= 100_000:
+				_dbg_last_underrun_usec = now_usec
+				_dbg_underrun_events += 1
 		return
 
 	if not _started:
 		if _pending_available() < _start_buffer_frames:
 			return
 		_started = true
+		_dbg_playback_start_count += 1
 
 	var frames_available := _playback.get_frames_available()
 	if frames_available <= 0:
@@ -85,9 +107,33 @@ func _flush_pending_to_playback() -> void:
 
 	for i in range(to_push):
 		_playback.push_frame(_pending_frames[_pending_read_pos + i])
+	_dbg_frames_pushed += to_push
 
 	_pending_read_pos += to_push
 	_compact_pending_if_needed()
+
+
+func consume_debug_playback_snapshot() -> Dictionary:
+	var snapshot := {
+		"peer_id": peer_id,
+		"started": _started,
+		"pending_frames": _pending_available(),
+		"chunks_received": _dbg_chunks_received,
+		"frames_received": _dbg_frames_received,
+		"frames_pushed": _dbg_frames_pushed,
+		"pending_drop_frames": _dbg_pending_drop_frames,
+		"playback_start_count": _dbg_playback_start_count,
+		"underrun_events": _dbg_underrun_events,
+	}
+
+	_dbg_chunks_received = 0
+	_dbg_frames_received = 0
+	_dbg_frames_pushed = 0
+	_dbg_pending_drop_frames = 0
+	_dbg_playback_start_count = 0
+	_dbg_underrun_events = 0
+
+	return snapshot
 
 
 func _set_voice_signal_enabled(enabled: bool) -> void:
