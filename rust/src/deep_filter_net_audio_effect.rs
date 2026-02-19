@@ -297,7 +297,7 @@ impl IAudioEffectInstance for AudioEffectDeepFilterNetInstance {
                     let in_rms = Self::rms(chunk);
                     let out_rms = Self::rms(enhanced.as_slice().unwrap_or(&[]));
 
-                    // Guard against over-suppression that can cause robotic/choppy dropouts.
+                    // Guard against over-suppression that can cause robotic/choppy dropouts
                     if in_rms > 1e-4 && out_rms < in_rms * 0.08 {
                         for (dry, wet) in chunk.iter().zip(enhanced.iter()) {
                             let sample = dry * 0.8 + wet * 0.2;
