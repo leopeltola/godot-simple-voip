@@ -22,8 +22,8 @@ driver/mix_rate=48000
 
 [autoload]
 
-Test="*res://addons/godot_simple_voip/multiplayer_voip.gd"
-VOIP="*res://addons/godot_simple_voip/multiplayer_voip.gd"
+VoipSingleton="*res://addons/godot_simple_voip/voip_singleton.gd"
+VOIP="*res://addons/godot_simple_voip/voip_singleton.gd"
 
 [dotnet]
 

@@ -2,20 +2,12 @@
 extends EditorPlugin
 
 const AUTOLOAD_NAME = "VOIP"
-
-
-func _enter_tree() -> void:
-	pass
-
-
-func _exit_tree() -> void:
-	pass
+const SINGLETON_SCRIPT = "voip_singleton.gd"
 
 
 func _enable_plugin():
-	# The autoload can be a scene or script file.
-	add_autoload_singleton(AUTOLOAD_NAME, "multiplayer_voip.gd")
-	
+	# Register the VOIP singleton
+	add_autoload_singleton(AUTOLOAD_NAME, "res://addons/godot_simple_voip/voip_singleton.gd")
 
 
 func _disable_plugin():
