@@ -28,6 +28,7 @@ const PORT := 25562
 
 var _voip_players: Dictionary = {}
 var _mic_player: AudioStreamPlayer = null
+var _updating_effect_controls := false
 
 
 func _ready() -> void:
@@ -101,17 +102,7 @@ func _setup_effect_controls() -> void:
 		_set_effect_controls_enabled(false)
 		return
 
-	var config := VOIP.get_effect_runtime_config()
-	_high_pass_enabled.button_pressed = bool(config.get("high_pass_enabled", true))
-	_high_pass_cutoff.value = float(config.get("high_pass_cutoff_hz", 100.0))
-	_low_pass_enabled.button_pressed = bool(config.get("low_pass_enabled", true))
-	_low_pass_cutoff.value = float(config.get("low_pass_cutoff_hz", 16000.0))
-	_rnnoise_enabled.button_pressed = bool(config.get("rnnoise_enabled", true))
-	_compressor_enabled.button_pressed = bool(config.get("compressor_enabled", true))
-	_compressor_threshold.value = float(config.get("compressor_threshold_db", -7.0))
-	_amplify_enabled.button_pressed = bool(config.get("amplify_enabled", true))
-	_amplify_db.value = float(config.get("amplify_db", 7.0))
-	_limiter_enabled.button_pressed = bool(config.get("limiter_enabled", true))
+	_apply_effect_config_to_controls(VOIP.get_effect_runtime_config())
 
 	_high_pass_enabled.toggled.connect(_on_effect_control_changed)
 	_low_pass_enabled.toggled.connect(_on_effect_control_changed)
@@ -126,7 +117,7 @@ func _setup_effect_controls() -> void:
 	_amplify_db.value_changed.connect(_on_amplify_changed)
 
 	_refresh_effect_value_labels()
-	_set_effect_controls_enabled(true)
+	_update_effect_controls_for_role()
 
 
 func _set_effect_controls_enabled(enabled: bool) -> void:
@@ -176,8 +167,20 @@ func _refresh_effect_value_labels() -> void:
 func _push_effect_runtime_config() -> void:
 	if not has_node("/root/VOIP"):
 		return
+	if _updating_effect_controls:
+		return
+	if not _can_edit_effect_controls():
+		return
 
-	VOIP.set_effect_runtime_config({
+	var config := _collect_effect_runtime_config_from_controls()
+	VOIP.set_effect_runtime_config(config)
+
+	if multiplayer.multiplayer_peer != null and multiplayer.is_server():
+		_rpc_apply_effect_runtime_config.rpc(config)
+
+
+func _collect_effect_runtime_config_from_controls() -> Dictionary:
+	return {
 		"high_pass_enabled": _high_pass_enabled.button_pressed,
 		"high_pass_cutoff_hz": _high_pass_cutoff.value,
 		"low_pass_enabled": _low_pass_enabled.button_pressed,
@@ -188,7 +191,53 @@ func _push_effect_runtime_config() -> void:
 		"amplify_enabled": _amplify_enabled.button_pressed,
 		"amplify_db": _amplify_db.value,
 		"limiter_enabled": _limiter_enabled.button_pressed,
-	})
+	}
+
+
+func _apply_effect_config_to_controls(config: Dictionary) -> void:
+	_updating_effect_controls = true
+	_high_pass_enabled.button_pressed = bool(config.get("high_pass_enabled", true))
+	_high_pass_cutoff.value = float(config.get("high_pass_cutoff_hz", 100.0))
+	_low_pass_enabled.button_pressed = bool(config.get("low_pass_enabled", true))
+	_low_pass_cutoff.value = float(config.get("low_pass_cutoff_hz", 16000.0))
+	_rnnoise_enabled.button_pressed = bool(config.get("rnnoise_enabled", true))
+	_compressor_enabled.button_pressed = bool(config.get("compressor_enabled", true))
+	_compressor_threshold.value = float(config.get("compressor_threshold_db", -7.0))
+	_amplify_enabled.button_pressed = bool(config.get("amplify_enabled", true))
+	_amplify_db.value = float(config.get("amplify_db", 7.0))
+	_limiter_enabled.button_pressed = bool(config.get("limiter_enabled", true))
+	_updating_effect_controls = false
+	_refresh_effect_value_labels()
+
+
+func _can_edit_effect_controls() -> bool:
+	if multiplayer.multiplayer_peer == null:
+		return true
+	return multiplayer.is_server()
+
+
+func _update_effect_controls_for_role() -> void:
+	_set_effect_controls_enabled(_can_edit_effect_controls())
+
+
+@rpc("any_peer", "reliable", "call_remote")
+func _rpc_request_effect_runtime_config() -> void:
+	if not multiplayer.is_server():
+		return
+	if not has_node("/root/VOIP"):
+		return
+	var requester_id := multiplayer.get_remote_sender_id()
+	if requester_id == 0:
+		return
+	_rpc_apply_effect_runtime_config.rpc_id(requester_id, VOIP.get_effect_runtime_config())
+
+
+@rpc("authority", "reliable", "call_remote")
+func _rpc_apply_effect_runtime_config(config: Dictionary) -> void:
+	if not has_node("/root/VOIP"):
+		return
+	VOIP.set_effect_runtime_config(config)
+	_apply_effect_config_to_controls(config)
 
 
 func _setup_voip_stats_logging() -> void:
@@ -301,6 +350,8 @@ func disconnect_current_peer(log_reason: bool = true) -> void:
 	_set_status("Disconnected")
 	_update_peer_count()
 	_update_connection_ui()
+	if has_node("/root/VOIP"):
+		_apply_effect_config_to_controls(VOIP.get_effect_runtime_config())
 
 	if log_reason:
 		_log("Disconnected.")
@@ -310,6 +361,7 @@ func _on_connected_to_server() -> void:
 	_set_status("Connected (peer id: %d)" % multiplayer.get_unique_id())
 	_log("Connected to server.")
 	_update_connection_ui()
+	_rpc_request_effect_runtime_config.rpc_id(1)
 
 
 func _on_connection_failed() -> void:
@@ -328,6 +380,8 @@ func _on_peer_connected(peer_id: int) -> void:
 	_create_voip_player_for_peer(peer_id)
 	_update_peer_count()
 	_log("Peer connected: %d" % peer_id)
+	if multiplayer.is_server() and has_node("/root/VOIP"):
+		_rpc_apply_effect_runtime_config.rpc_id(peer_id, VOIP.get_effect_runtime_config())
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
@@ -382,6 +436,7 @@ func _update_connection_ui() -> void:
 	_join_button.disabled = connected
 	_host_button.disabled = connected
 	_disconnect_button.disabled = not connected
+	_update_effect_controls_for_role()
 
 
 func _log(message: String) -> void:

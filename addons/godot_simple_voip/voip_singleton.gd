@@ -190,6 +190,7 @@ func _setup_bus() -> void:
 	# Compress the louder sounds to be quieter
 	_compressor = AudioEffectCompressor.new()
 	_compressor.threshold = compressor_threshold_db
+	_compressor.attack_us = 2000
 	AudioServer.add_bus_effect(_bus_idx, _compressor)
 	
 	# Amplify everything to offset the compression
