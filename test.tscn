@@ -12,3 +12,4 @@ grow_vertical = 2
 
 [node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="."]
 stream = SubResource("AudioStreamMicrophone_mf4mk")
+bus = &"VOIP-disabled"

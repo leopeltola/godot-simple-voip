@@ -160,7 +160,7 @@ func _setup_bus() -> void:
 	AudioServer.add_bus_effect(_bus_idx, high_pass)
 	
 	var low_pass := AudioEffectLowPassFilter.new()
-	low_pass.cutoff_hz = 8000.0
+	low_pass.cutoff_hz = 16000.0
 	AudioServer.add_bus_effect(_bus_idx, low_pass)
 	
 	# Remove noise using neural network
@@ -169,12 +169,12 @@ func _setup_bus() -> void:
 	
 	# Compress the louder sounds to be quieter
 	var compressor := AudioEffectCompressor.new()
-	compressor.threshold = -16
+	compressor.threshold = -7
 	AudioServer.add_bus_effect(_bus_idx, compressor)
 	
 	# Amplify everything to offset the compression
 	var amplify := AudioEffectAmplify.new()
-	amplify.volume_db = 16.0
+	amplify.volume_db = 7.0
 	AudioServer.add_bus_effect(_bus_idx, amplify)
 	
 	# Ensure no clipping
