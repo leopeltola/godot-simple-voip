@@ -1,4 +1,4 @@
-[gd_resource type="AudioBusLayout" load_steps=9 format=3 uid="uid://wsyu7mjwggqb"]
+[gd_resource type="AudioBusLayout" load_steps=10 format=3 uid="uid://wsyu7mjwggqb"]
 
 [sub_resource type="AudioEffectHardLimiter" id="AudioEffectHardLimiter_g28q7"]
 resource_name = "HardLimiter"
@@ -30,8 +30,11 @@ resource_name = "HardLimiter"
 resource_name = "EQ6"
 band_db/10000_hz = 6.1
 
+[sub_resource type="AudioEffectDeepFilterNet" id="AudioEffectDeepFilterNet_j3pel"]
+resource_name = "DeepFilterNet"
+
 [resource]
-bus/0/volume_db = -80.0
+bus/0/volume_db = 0.265018
 bus/0/effect/0/effect = SubResource("AudioEffectHardLimiter_g28q7")
 bus/0/effect/0/enabled = true
 bus/1/name = &"VOIP-disabled"
@@ -41,16 +44,18 @@ bus/1/bypass_fx = false
 bus/1/volume_db = -0.128275
 bus/1/send = &"Master"
 bus/1/effect/0/effect = SubResource("AudioEffectHighPassFilter_j3pel")
-bus/1/effect/0/enabled = true
+bus/1/effect/0/enabled = false
 bus/1/effect/1/effect = SubResource("AudioEffectLowPassFilter_j3pel")
-bus/1/effect/1/enabled = true
+bus/1/effect/1/enabled = false
 bus/1/effect/2/effect = SubResource("AudioEffectRNNoise_g28q7")
-bus/1/effect/2/enabled = true
+bus/1/effect/2/enabled = false
 bus/1/effect/3/effect = SubResource("AudioEffectCompressor_j3pel")
-bus/1/effect/3/enabled = true
+bus/1/effect/3/enabled = false
 bus/1/effect/4/effect = SubResource("AudioEffectAmplify_j3pel")
-bus/1/effect/4/enabled = true
+bus/1/effect/4/enabled = false
 bus/1/effect/5/effect = SubResource("AudioEffectHardLimiter_j3pel")
-bus/1/effect/5/enabled = true
+bus/1/effect/5/enabled = false
 bus/1/effect/6/effect = SubResource("AudioEffectEQ6_j3pel")
-bus/1/effect/6/enabled = true
+bus/1/effect/6/enabled = false
+bus/1/effect/7/effect = SubResource("AudioEffectDeepFilterNet_j3pel")
+bus/1/effect/7/enabled = false
