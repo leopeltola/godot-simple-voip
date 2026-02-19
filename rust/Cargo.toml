@@ -10,3 +10,4 @@ crate-type = ["cdylib"]
 godot = {version = "0.3.4", features = ["experimental-threads", "register-docs"]}
 nnnoiseless = "0.5.1"
 opus = "0.3.0"
+deep_filter = { path = "./DeepFilterNet/libDF", default-features = false, features = ["tract", "default-model", "logging"] }
