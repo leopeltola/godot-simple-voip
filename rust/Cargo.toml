@@ -7,7 +7,6 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-deep_filter = "0.2.5"
 godot = {version = "0.3.4", features = ["experimental-threads", "register-docs"]}
 nnnoiseless = "0.5.1"
 opus = "0.3.0"
