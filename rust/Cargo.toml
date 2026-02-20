@@ -12,3 +12,4 @@ nnnoiseless = "0.5.1"
 opus = "0.3.0"
 ndarray = "0.15"
 deep_filter = { path = "./DeepFilterNet/libDF", default-features = false, features = ["tract", "default-model-ll", "logging"] }
+ringbuf = "0.4"
