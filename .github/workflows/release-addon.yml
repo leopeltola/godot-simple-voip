@@ -54,7 +54,7 @@ jobs:
             throw "Expected release DLL not found at '$releaseDll'"
           }
 
-          Copy-Item -Path $releaseDll -Destination (Join-Path $addonBinDir "simple_voip_release.dll") -Force
+          Copy-Item -Path $releaseDll -Destination (Join-Path $addonBinDir "simple_voip.dll") -Force
 
           if (Test-Path "LICENSE") {
             Copy-Item -Path "LICENSE" -Destination $stagingDir -Force

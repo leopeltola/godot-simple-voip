@@ -5,4 +5,4 @@ reloadable = true
 
 [libraries]
 windows.debug.x86_64 =   "res://addons/godot_simple_voip/bin/simple_voip.dll"
-windows.release.x86_64 = "res://addons/godot_simple_voip/bin/simple_voip_release.dll"
+windows.release.x86_64 = "res://addons/godot_simple_voip/bin/simple_voip.dll"
