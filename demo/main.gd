@@ -15,9 +15,39 @@ const PORT := 25562
 @onready var _low_pass_cutoff: HSlider = %LowPassCutoff
 @onready var _low_pass_value: Label = %LowPassValue
 @onready var _rnnoise_enabled: CheckBox = %RNNoiseEnabled
+@onready var _deep_filter_enabled: CheckBox = %DeepFilterEnabled
+@onready var _deep_filter_attenuation_limit: HSlider = %DeepFilterAttenuationLimit
+@onready var _deep_filter_attenuation_value: Label = %DeepFilterAttenuationValue
+@onready var _deep_filter_min_db_threshold: HSlider = %DeepFilterMinDbThreshold
+@onready var _deep_filter_min_db_value: Label = %DeepFilterMinDbValue
+@onready var _deep_filter_max_db_erb_threshold: HSlider = %DeepFilterMaxDbErbThreshold
+@onready var _deep_filter_max_db_erb_value: Label = %DeepFilterMaxDbErbValue
+@onready var _deep_filter_max_db_df_threshold: HSlider = %DeepFilterMaxDbDfThreshold
+@onready var _deep_filter_max_db_df_value: Label = %DeepFilterMaxDbDfValue
+@onready var _deep_filter_post_filter_beta: HSlider = %DeepFilterPostFilterBeta
+@onready var _deep_filter_post_filter_beta_value: Label = %DeepFilterPostFilterBetaValue
+@onready var _deep_filter_reduce_mask_mode: HSlider = %DeepFilterReduceMaskMode
+@onready var _deep_filter_reduce_mask_mode_value: Label = %DeepFilterReduceMaskModeValue
+@onready var _noise_gate_enabled: CheckBox = %NoiseGateEnabled
+@onready var _noise_gate_threshold: HSlider = %NoiseGateThreshold
+@onready var _noise_gate_threshold_value: Label = %NoiseGateThresholdValue
+@onready var _noise_gate_hysteresis: HSlider = %NoiseGateHysteresis
+@onready var _noise_gate_hysteresis_value: Label = %NoiseGateHysteresisValue
+@onready var _noise_gate_attack: HSlider = %NoiseGateAttack
+@onready var _noise_gate_attack_value: Label = %NoiseGateAttackValue
+@onready var _noise_gate_release: HSlider = %NoiseGateRelease
+@onready var _noise_gate_release_value: Label = %NoiseGateReleaseValue
+@onready var _noise_gate_hold: HSlider = %NoiseGateHold
+@onready var _noise_gate_hold_value: Label = %NoiseGateHoldValue
+@onready var _noise_gate_floor: HSlider = %NoiseGateFloor
+@onready var _noise_gate_floor_value: Label = %NoiseGateFloorValue
 @onready var _compressor_enabled: CheckBox = %CompressorEnabled
 @onready var _compressor_threshold: HSlider = %CompressorThreshold
 @onready var _compressor_value: Label = %CompressorValue
+@onready var _compressor_attack_us: HSlider = %CompressorAttackUs
+@onready var _compressor_attack_value: Label = %CompressorAttackValue
+@onready var _compressor_release_us: HSlider = %CompressorReleaseUs
+@onready var _compressor_release_value: Label = %CompressorReleaseValue
 @onready var _amplify_enabled: CheckBox = %AmplifyEnabled
 @onready var _amplify_db: HSlider = %AmplifyDb
 @onready var _amplify_value: Label = %AmplifyValue
@@ -102,19 +132,36 @@ func _setup_effect_controls() -> void:
 	if not has_node("/root/VOIP"):
 		_set_effect_controls_enabled(false)
 		return
+	_ensure_demo_effects_on_voip_bus()
 
 	_apply_effect_config_to_controls(_read_effect_runtime_config_from_bus())
 
 	_high_pass_enabled.toggled.connect(_on_effect_control_changed)
 	_low_pass_enabled.toggled.connect(_on_effect_control_changed)
 	_rnnoise_enabled.toggled.connect(_on_effect_control_changed)
+	_deep_filter_enabled.toggled.connect(_on_effect_control_changed)
+	_noise_gate_enabled.toggled.connect(_on_effect_control_changed)
 	_compressor_enabled.toggled.connect(_on_effect_control_changed)
 	_amplify_enabled.toggled.connect(_on_effect_control_changed)
 	_limiter_enabled.toggled.connect(_on_effect_control_changed)
 
 	_high_pass_cutoff.value_changed.connect(_on_high_pass_changed)
 	_low_pass_cutoff.value_changed.connect(_on_low_pass_changed)
+	_deep_filter_attenuation_limit.value_changed.connect(_on_deep_filter_changed)
+	_deep_filter_min_db_threshold.value_changed.connect(_on_deep_filter_changed)
+	_deep_filter_max_db_erb_threshold.value_changed.connect(_on_deep_filter_changed)
+	_deep_filter_max_db_df_threshold.value_changed.connect(_on_deep_filter_changed)
+	_deep_filter_post_filter_beta.value_changed.connect(_on_deep_filter_changed)
+	_deep_filter_reduce_mask_mode.value_changed.connect(_on_deep_filter_changed)
+	_noise_gate_threshold.value_changed.connect(_on_noise_gate_changed)
+	_noise_gate_hysteresis.value_changed.connect(_on_noise_gate_changed)
+	_noise_gate_attack.value_changed.connect(_on_noise_gate_changed)
+	_noise_gate_release.value_changed.connect(_on_noise_gate_changed)
+	_noise_gate_hold.value_changed.connect(_on_noise_gate_changed)
+	_noise_gate_floor.value_changed.connect(_on_noise_gate_changed)
 	_compressor_threshold.value_changed.connect(_on_compressor_threshold_changed)
+	_compressor_attack_us.value_changed.connect(_on_compressor_attack_changed)
+	_compressor_release_us.value_changed.connect(_on_compressor_release_changed)
 	_amplify_db.value_changed.connect(_on_amplify_changed)
 
 	_refresh_effect_value_labels()
@@ -127,8 +174,24 @@ func _set_effect_controls_enabled(enabled: bool) -> void:
 	_low_pass_enabled.disabled = not enabled
 	_low_pass_cutoff.editable = enabled
 	_rnnoise_enabled.disabled = not enabled
+	_deep_filter_enabled.disabled = not enabled
+	_deep_filter_attenuation_limit.editable = enabled
+	_deep_filter_min_db_threshold.editable = enabled
+	_deep_filter_max_db_erb_threshold.editable = enabled
+	_deep_filter_max_db_df_threshold.editable = enabled
+	_deep_filter_post_filter_beta.editable = enabled
+	_deep_filter_reduce_mask_mode.editable = enabled
+	_noise_gate_enabled.disabled = not enabled
+	_noise_gate_threshold.editable = enabled
+	_noise_gate_hysteresis.editable = enabled
+	_noise_gate_attack.editable = enabled
+	_noise_gate_release.editable = enabled
+	_noise_gate_hold.editable = enabled
+	_noise_gate_floor.editable = enabled
 	_compressor_enabled.disabled = not enabled
 	_compressor_threshold.editable = enabled
+	_compressor_attack_us.editable = enabled
+	_compressor_release_us.editable = enabled
 	_amplify_enabled.disabled = not enabled
 	_amplify_db.editable = enabled
 	_limiter_enabled.disabled = not enabled
@@ -148,7 +211,27 @@ func _on_low_pass_changed(_value: float) -> void:
 	_push_effect_runtime_config()
 
 
+func _on_deep_filter_changed(_value: float) -> void:
+	_refresh_effect_value_labels()
+	_push_effect_runtime_config()
+
+
+func _on_noise_gate_changed(_value: float) -> void:
+	_refresh_effect_value_labels()
+	_push_effect_runtime_config()
+
+
 func _on_compressor_threshold_changed(_value: float) -> void:
+	_refresh_effect_value_labels()
+	_push_effect_runtime_config()
+
+
+func _on_compressor_attack_changed(_value: float) -> void:
+	_refresh_effect_value_labels()
+	_push_effect_runtime_config()
+
+
+func _on_compressor_release_changed(_value: float) -> void:
 	_refresh_effect_value_labels()
 	_push_effect_runtime_config()
 
@@ -161,7 +244,21 @@ func _on_amplify_changed(_value: float) -> void:
 func _refresh_effect_value_labels() -> void:
 	_high_pass_value.text = "%d Hz" % int(round(_high_pass_cutoff.value))
 	_low_pass_value.text = "%d Hz" % int(round(_low_pass_cutoff.value))
+	_deep_filter_attenuation_value.text = "%.1f dB" % _deep_filter_attenuation_limit.value
+	_deep_filter_min_db_value.text = "%.1f dB" % _deep_filter_min_db_threshold.value
+	_deep_filter_max_db_erb_value.text = "%.1f dB" % _deep_filter_max_db_erb_threshold.value
+	_deep_filter_max_db_df_value.text = "%.1f dB" % _deep_filter_max_db_df_threshold.value
+	_deep_filter_post_filter_beta_value.text = "%.2f" % _deep_filter_post_filter_beta.value
+	_deep_filter_reduce_mask_mode_value.text = "%d" % int(round(_deep_filter_reduce_mask_mode.value))
+	_noise_gate_threshold_value.text = "%.1f dB" % _noise_gate_threshold.value
+	_noise_gate_hysteresis_value.text = "%.1f dB" % _noise_gate_hysteresis.value
+	_noise_gate_attack_value.text = "%.1f ms" % _noise_gate_attack.value
+	_noise_gate_release_value.text = "%.1f ms" % _noise_gate_release.value
+	_noise_gate_hold_value.text = "%.1f ms" % _noise_gate_hold.value
+	_noise_gate_floor_value.text = "%.1f dB" % _noise_gate_floor.value
 	_compressor_value.text = "%.1f dB" % _compressor_threshold.value
+	_compressor_attack_value.text = "%d us" % int(round(_compressor_attack_us.value))
+	_compressor_release_value.text = "%d us" % int(round(_compressor_release_us.value))
 	_amplify_value.text = "%.1f dB" % _amplify_db.value
 
 
@@ -187,8 +284,24 @@ func _collect_effect_runtime_config_from_controls() -> Dictionary:
 		"low_pass_enabled": _low_pass_enabled.button_pressed,
 		"low_pass_cutoff_hz": _low_pass_cutoff.value,
 		"rnnoise_enabled": _rnnoise_enabled.button_pressed,
+		"deep_filter_enabled": _deep_filter_enabled.button_pressed,
+		"deep_filter_attenuation_limit_db": _deep_filter_attenuation_limit.value,
+		"deep_filter_min_db_threshold": _deep_filter_min_db_threshold.value,
+		"deep_filter_max_db_erb_threshold": _deep_filter_max_db_erb_threshold.value,
+		"deep_filter_max_db_df_threshold": _deep_filter_max_db_df_threshold.value,
+		"deep_filter_post_filter_beta": _deep_filter_post_filter_beta.value,
+		"deep_filter_reduce_mask_mode": int(round(_deep_filter_reduce_mask_mode.value)),
+		"noise_gate_enabled": _noise_gate_enabled.button_pressed,
+		"noise_gate_threshold_db": _noise_gate_threshold.value,
+		"noise_gate_hysteresis_db": _noise_gate_hysteresis.value,
+		"noise_gate_attack_ms": _noise_gate_attack.value,
+		"noise_gate_release_ms": _noise_gate_release.value,
+		"noise_gate_hold_ms": _noise_gate_hold.value,
+		"noise_gate_floor_db": _noise_gate_floor.value,
 		"compressor_enabled": _compressor_enabled.button_pressed,
 		"compressor_threshold_db": _compressor_threshold.value,
+		"compressor_attack_us": _compressor_attack_us.value,
+		"compressor_release_us": _compressor_release_us.value,
 		"amplify_enabled": _amplify_enabled.button_pressed,
 		"amplify_db": _amplify_db.value,
 		"limiter_enabled": _limiter_enabled.button_pressed,
@@ -202,8 +315,24 @@ func _apply_effect_config_to_controls(config: Dictionary) -> void:
 	_low_pass_enabled.button_pressed = bool(config.get("low_pass_enabled", true))
 	_low_pass_cutoff.value = float(config.get("low_pass_cutoff_hz", 16000.0))
 	_rnnoise_enabled.button_pressed = bool(config.get("rnnoise_enabled", true))
+	_deep_filter_enabled.button_pressed = bool(config.get("deep_filter_enabled", true))
+	_deep_filter_attenuation_limit.value = float(config.get("deep_filter_attenuation_limit_db", 100.0))
+	_deep_filter_min_db_threshold.value = float(config.get("deep_filter_min_db_threshold", -10.0))
+	_deep_filter_max_db_erb_threshold.value = float(config.get("deep_filter_max_db_erb_threshold", 30.0))
+	_deep_filter_max_db_df_threshold.value = float(config.get("deep_filter_max_db_df_threshold", 20.0))
+	_deep_filter_post_filter_beta.value = float(config.get("deep_filter_post_filter_beta", 0.02))
+	_deep_filter_reduce_mask_mode.value = float(config.get("deep_filter_reduce_mask_mode", 2))
+	_noise_gate_enabled.button_pressed = bool(config.get("noise_gate_enabled", true))
+	_noise_gate_threshold.value = float(config.get("noise_gate_threshold_db", -45.0))
+	_noise_gate_hysteresis.value = float(config.get("noise_gate_hysteresis_db", 6.0))
+	_noise_gate_attack.value = float(config.get("noise_gate_attack_ms", 5.0))
+	_noise_gate_release.value = float(config.get("noise_gate_release_ms", 120.0))
+	_noise_gate_hold.value = float(config.get("noise_gate_hold_ms", 35.0))
+	_noise_gate_floor.value = float(config.get("noise_gate_floor_db", -80.0))
 	_compressor_enabled.button_pressed = bool(config.get("compressor_enabled", true))
 	_compressor_threshold.value = float(config.get("compressor_threshold_db", -7.0))
+	_compressor_attack_us.value = float(config.get("compressor_attack_us", 2000.0))
+	_compressor_release_us.value = float(config.get("compressor_release_us", 120000.0))
 	_amplify_enabled.button_pressed = bool(config.get("amplify_enabled", true))
 	_amplify_db.value = float(config.get("amplify_db", 7.0))
 	_limiter_enabled.button_pressed = bool(config.get("limiter_enabled", true))
@@ -212,6 +341,7 @@ func _apply_effect_config_to_controls(config: Dictionary) -> void:
 
 
 func _read_effect_runtime_config_from_bus() -> Dictionary:
+	_ensure_demo_effects_on_voip_bus()
 	var bus_idx := AudioServer.get_bus_index("VOIP")
 	if bus_idx == -1:
 		return _collect_effect_runtime_config_from_controls()
@@ -219,6 +349,8 @@ func _read_effect_runtime_config_from_bus() -> Dictionary:
 	var high_pass: AudioEffectHighPassFilter = null
 	var low_pass: AudioEffectLowPassFilter = null
 	var rnnoise: AudioEffectRNNoise = null
+	var deep_filter_net: AudioEffectDeepFilterNet = null
+	var noise_gate: AudioEffectNoiseGate = null
 	var compressor: AudioEffectCompressor = null
 	var amplify: AudioEffectAmplify = null
 	var limiter: AudioEffectHardLimiter = null
@@ -231,6 +363,10 @@ func _read_effect_runtime_config_from_bus() -> Dictionary:
 			low_pass = effect as AudioEffectLowPassFilter
 		elif effect is AudioEffectRNNoise and rnnoise == null:
 			rnnoise = effect as AudioEffectRNNoise
+		elif effect is AudioEffectDeepFilterNet and deep_filter_net == null:
+			deep_filter_net = effect as AudioEffectDeepFilterNet
+		elif effect is AudioEffectNoiseGate and noise_gate == null:
+			noise_gate = effect as AudioEffectNoiseGate
 		elif effect is AudioEffectCompressor and compressor == null:
 			compressor = effect as AudioEffectCompressor
 		elif effect is AudioEffectAmplify:
@@ -246,8 +382,24 @@ func _read_effect_runtime_config_from_bus() -> Dictionary:
 		"low_pass_enabled": _is_bus_effect_enabled(bus_idx, low_pass, true),
 		"low_pass_cutoff_hz": low_pass.cutoff_hz if low_pass != null else 16000.0,
 		"rnnoise_enabled": _is_bus_effect_enabled(bus_idx, rnnoise, true),
+		"deep_filter_enabled": _is_bus_effect_enabled(bus_idx, deep_filter_net, true),
+		"deep_filter_attenuation_limit_db": deep_filter_net.attenuation_limit_db if deep_filter_net != null else 100.0,
+		"deep_filter_min_db_threshold": deep_filter_net.min_db_threshold if deep_filter_net != null else -10.0,
+		"deep_filter_max_db_erb_threshold": deep_filter_net.max_db_erb_threshold if deep_filter_net != null else 30.0,
+		"deep_filter_max_db_df_threshold": deep_filter_net.max_db_df_threshold if deep_filter_net != null else 20.0,
+		"deep_filter_post_filter_beta": deep_filter_net.post_filter_beta if deep_filter_net != null else 0.02,
+		"deep_filter_reduce_mask_mode": deep_filter_net.reduce_mask_mode if deep_filter_net != null else 2,
+		"noise_gate_enabled": _is_bus_effect_enabled(bus_idx, noise_gate, true),
+		"noise_gate_threshold_db": noise_gate.threshold_db if noise_gate != null else -45.0,
+		"noise_gate_hysteresis_db": noise_gate.hysteresis_db if noise_gate != null else 6.0,
+		"noise_gate_attack_ms": noise_gate.attack_ms if noise_gate != null else 5.0,
+		"noise_gate_release_ms": noise_gate.release_ms if noise_gate != null else 120.0,
+		"noise_gate_hold_ms": noise_gate.hold_ms if noise_gate != null else 35.0,
+		"noise_gate_floor_db": noise_gate.floor_db if noise_gate != null else -80.0,
 		"compressor_enabled": _is_bus_effect_enabled(bus_idx, compressor, true),
 		"compressor_threshold_db": compressor.threshold if compressor != null else -7.0,
+		"compressor_attack_us": _read_effect_us_property(compressor, "attack_us", "attack_ms", 2000.0),
+		"compressor_release_us": _read_effect_us_property(compressor, "release_us", "release_ms", 120000.0),
 		"amplify_enabled": _is_bus_effect_enabled(bus_idx, amplify, true),
 		"amplify_db": amplify.volume_db if amplify != null else 7.0,
 		"limiter_enabled": _is_bus_effect_enabled(bus_idx, limiter, true),
@@ -255,6 +407,7 @@ func _read_effect_runtime_config_from_bus() -> Dictionary:
 
 
 func _apply_effect_runtime_config_to_bus(config: Dictionary) -> void:
+	_ensure_demo_effects_on_voip_bus()
 	var bus_idx := AudioServer.get_bus_index("VOIP")
 	if bus_idx == -1:
 		return
@@ -262,6 +415,8 @@ func _apply_effect_runtime_config_to_bus(config: Dictionary) -> void:
 	var high_pass: AudioEffectHighPassFilter = null
 	var low_pass: AudioEffectLowPassFilter = null
 	var rnnoise: AudioEffectRNNoise = null
+	var deep_filter_net: AudioEffectDeepFilterNet = null
+	var noise_gate: AudioEffectNoiseGate = null
 	var compressor: AudioEffectCompressor = null
 	var amplify: AudioEffectAmplify = null
 	var limiter: AudioEffectHardLimiter = null
@@ -274,6 +429,10 @@ func _apply_effect_runtime_config_to_bus(config: Dictionary) -> void:
 			low_pass = effect as AudioEffectLowPassFilter
 		elif effect is AudioEffectRNNoise and rnnoise == null:
 			rnnoise = effect as AudioEffectRNNoise
+		elif effect is AudioEffectDeepFilterNet and deep_filter_net == null:
+			deep_filter_net = effect as AudioEffectDeepFilterNet
+		elif effect is AudioEffectNoiseGate and noise_gate == null:
+			noise_gate = effect as AudioEffectNoiseGate
 		elif effect is AudioEffectCompressor and compressor == null:
 			compressor = effect as AudioEffectCompressor
 		elif effect is AudioEffectAmplify:
@@ -291,8 +450,26 @@ func _apply_effect_runtime_config_to_bus(config: Dictionary) -> void:
 		_set_bus_effect_enabled(bus_idx, low_pass, bool(config.get("low_pass_enabled", true)))
 	if rnnoise != null:
 		_set_bus_effect_enabled(bus_idx, rnnoise, bool(config.get("rnnoise_enabled", true)))
+	if deep_filter_net != null:
+		deep_filter_net.attenuation_limit_db = clampf(float(config.get("deep_filter_attenuation_limit_db", deep_filter_net.attenuation_limit_db)), 0.0, 120.0)
+		deep_filter_net.min_db_threshold = clampf(float(config.get("deep_filter_min_db_threshold", deep_filter_net.min_db_threshold)), -80.0, 20.0)
+		deep_filter_net.max_db_erb_threshold = clampf(float(config.get("deep_filter_max_db_erb_threshold", deep_filter_net.max_db_erb_threshold)), -20.0, 80.0)
+		deep_filter_net.max_db_df_threshold = clampf(float(config.get("deep_filter_max_db_df_threshold", deep_filter_net.max_db_df_threshold)), -20.0, 80.0)
+		deep_filter_net.post_filter_beta = clampf(float(config.get("deep_filter_post_filter_beta", deep_filter_net.post_filter_beta)), 0.0, 1.0)
+		deep_filter_net.reduce_mask_mode = clampi(int(config.get("deep_filter_reduce_mask_mode", deep_filter_net.reduce_mask_mode)), 0, 2)
+		_set_bus_effect_enabled(bus_idx, deep_filter_net, bool(config.get("deep_filter_enabled", true)))
+	if noise_gate != null:
+		noise_gate.threshold_db = clampf(float(config.get("noise_gate_threshold_db", noise_gate.threshold_db)), -80.0, 0.0)
+		noise_gate.hysteresis_db = clampf(float(config.get("noise_gate_hysteresis_db", noise_gate.hysteresis_db)), 0.0, 24.0)
+		noise_gate.attack_ms = clampf(float(config.get("noise_gate_attack_ms", noise_gate.attack_ms)), 0.0, 300.0)
+		noise_gate.release_ms = clampf(float(config.get("noise_gate_release_ms", noise_gate.release_ms)), 0.0, 2000.0)
+		noise_gate.hold_ms = clampf(float(config.get("noise_gate_hold_ms", noise_gate.hold_ms)), 0.0, 2000.0)
+		noise_gate.floor_db = clampf(float(config.get("noise_gate_floor_db", noise_gate.floor_db)), -80.0, 0.0)
+		_set_bus_effect_enabled(bus_idx, noise_gate, bool(config.get("noise_gate_enabled", true)))
 	if compressor != null:
 		compressor.threshold = clampf(float(config.get("compressor_threshold_db", compressor.threshold)), -60.0, 0.0)
+		_write_effect_us_property(compressor, "attack_us", "attack_ms", clampf(float(config.get("compressor_attack_us", 2000.0)), 0.0, 2_000_000.0))
+		_write_effect_us_property(compressor, "release_us", "release_ms", clampf(float(config.get("compressor_release_us", 120000.0)), 0.0, 5_000_000.0))
 		_set_bus_effect_enabled(bus_idx, compressor, bool(config.get("compressor_enabled", true)))
 	if amplify != null:
 		amplify.volume_db = clampf(float(config.get("amplify_db", amplify.volume_db)), -24.0, 24.0)
@@ -326,6 +503,80 @@ func _find_effect_index(bus_idx: int, effect: AudioEffect) -> int:
 		if AudioServer.get_bus_effect(bus_idx, i) == effect:
 			return i
 	return -1
+
+
+func _ensure_demo_effects_on_voip_bus() -> void:
+	var bus_idx := AudioServer.get_bus_index("VOIP")
+	if bus_idx == -1:
+		return
+
+	var rnnoise_idx := -1
+	var deep_filter_idx := -1
+	var noise_gate_idx := -1
+
+	for i in range(AudioServer.get_bus_effect_count(bus_idx)):
+		var effect := AudioServer.get_bus_effect(bus_idx, i)
+		if effect is AudioEffectRNNoise and rnnoise_idx == -1:
+			rnnoise_idx = i
+		elif effect is AudioEffectDeepFilterNet and deep_filter_idx == -1:
+			deep_filter_idx = i
+		elif effect is AudioEffectNoiseGate and noise_gate_idx == -1:
+			noise_gate_idx = i
+
+	if deep_filter_idx == -1:
+		var dfn := AudioEffectDeepFilterNet.new()
+		if rnnoise_idx != -1:
+			AudioServer.add_bus_effect(bus_idx, dfn, rnnoise_idx + 1)
+		else:
+			AudioServer.add_bus_effect(bus_idx, dfn)
+
+		rnnoise_idx = -1
+		deep_filter_idx = -1
+		noise_gate_idx = -1
+		for i in range(AudioServer.get_bus_effect_count(bus_idx)):
+			var effect := AudioServer.get_bus_effect(bus_idx, i)
+			if effect is AudioEffectRNNoise and rnnoise_idx == -1:
+				rnnoise_idx = i
+			elif effect is AudioEffectDeepFilterNet and deep_filter_idx == -1:
+				deep_filter_idx = i
+			elif effect is AudioEffectNoiseGate and noise_gate_idx == -1:
+				noise_gate_idx = i
+
+	if noise_gate_idx == -1:
+		var ng := AudioEffectNoiseGate.new()
+		if deep_filter_idx != -1:
+			AudioServer.add_bus_effect(bus_idx, ng, deep_filter_idx + 1)
+		elif rnnoise_idx != -1:
+			AudioServer.add_bus_effect(bus_idx, ng, rnnoise_idx + 1)
+		else:
+			AudioServer.add_bus_effect(bus_idx, ng)
+
+
+func _read_effect_us_property(effect: Object, us_property: String, ms_property: String, fallback_us: float) -> float:
+	if effect == null:
+		return fallback_us
+	if _has_object_property(effect, us_property):
+		return float(effect.get(us_property))
+	if _has_object_property(effect, ms_property):
+		return float(effect.get(ms_property)) * 1000.0
+	return fallback_us
+
+
+func _write_effect_us_property(effect: Object, us_property: String, ms_property: String, value_us: float) -> void:
+	if effect == null:
+		return
+	if _has_object_property(effect, us_property):
+		effect.set(us_property, value_us)
+		return
+	if _has_object_property(effect, ms_property):
+		effect.set(ms_property, value_us / 1000.0)
+
+
+func _has_object_property(effect: Object, property_name: String) -> bool:
+	for prop in effect.get_property_list():
+		if String(prop.get("name", "")) == property_name:
+			return true
+	return false
 
 
 func _can_edit_effect_controls() -> bool:

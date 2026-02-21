@@ -19,9 +19,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -210.0
-offset_top = -190.0
+offset_top = -320.0
 offset_right = 210.0
-offset_bottom = 190.0
+offset_bottom = 320.0
 grow_horizontal = 2
 grow_vertical = 2
 
@@ -80,7 +80,8 @@ layout_mode = 2
 button_pressed = true
 text = "Use Opus compression"
 
-[node name="EffectsPanel" type="PanelContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="EffectsPanel" type="ScrollContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 300)
 layout_mode = 2
 
 [node name="EffectsMargin" type="MarginContainer" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel"]
@@ -153,6 +154,250 @@ layout_mode = 2
 button_pressed = true
 text = "RNNoise"
 
+[node name="DeepFilterEnabled" type="CheckBox" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+text = "DeepFilterNet"
+
+[node name="DeepFilterAttenuationRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DeepFilterAttenuationLimit" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/DeepFilterAttenuationRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 120.0
+step = 0.1
+value = 100.0
+
+[node name="DeepFilterAttenuationValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/DeepFilterAttenuationRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "100.0 dB"
+horizontal_alignment = 2
+
+[node name="DeepFilterMinDbRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DeepFilterMinDbThreshold" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/DeepFilterMinDbRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -80.0
+max_value = 20.0
+step = 0.1
+value = -10.0
+
+[node name="DeepFilterMinDbValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/DeepFilterMinDbRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "-10.0 dB"
+horizontal_alignment = 2
+
+[node name="DeepFilterMaxDbErbRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DeepFilterMaxDbErbThreshold" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/DeepFilterMaxDbErbRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -20.0
+max_value = 80.0
+step = 0.1
+value = 30.0
+
+[node name="DeepFilterMaxDbErbValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/DeepFilterMaxDbErbRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "30.0 dB"
+horizontal_alignment = 2
+
+[node name="DeepFilterMaxDbDfRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DeepFilterMaxDbDfThreshold" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/DeepFilterMaxDbDfRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -20.0
+max_value = 80.0
+step = 0.1
+value = 20.0
+
+[node name="DeepFilterMaxDbDfValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/DeepFilterMaxDbDfRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "20.0 dB"
+horizontal_alignment = 2
+
+[node name="DeepFilterPostFilterBetaRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DeepFilterPostFilterBeta" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/DeepFilterPostFilterBetaRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.01
+value = 0.02
+
+[node name="DeepFilterPostFilterBetaValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/DeepFilterPostFilterBetaRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "0.02"
+horizontal_alignment = 2
+
+[node name="DeepFilterReduceMaskModeRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DeepFilterReduceMaskMode" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/DeepFilterReduceMaskModeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 2.0
+value = 2.0
+
+[node name="DeepFilterReduceMaskModeValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/DeepFilterReduceMaskModeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "2"
+horizontal_alignment = 2
+
+[node name="NoiseGateEnabled" type="CheckBox" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+text = "Noise Gate"
+
+[node name="NoiseGateThresholdRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NoiseGateThreshold" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/NoiseGateThresholdRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -80.0
+max_value = 0.0
+step = 0.1
+value = -45.0
+
+[node name="NoiseGateThresholdValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/NoiseGateThresholdRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "-45.0 dB"
+horizontal_alignment = 2
+
+[node name="NoiseGateHysteresisRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NoiseGateHysteresis" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/NoiseGateHysteresisRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 24.0
+step = 0.1
+value = 6.0
+
+[node name="NoiseGateHysteresisValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/NoiseGateHysteresisRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "6.0 dB"
+horizontal_alignment = 2
+
+[node name="NoiseGateAttackRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NoiseGateAttack" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/NoiseGateAttackRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 300.0
+step = 0.1
+value = 5.0
+
+[node name="NoiseGateAttackValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/NoiseGateAttackRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "5.0 ms"
+horizontal_alignment = 2
+
+[node name="NoiseGateReleaseRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NoiseGateRelease" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/NoiseGateReleaseRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 2000.0
+step = 0.1
+value = 120.0
+
+[node name="NoiseGateReleaseValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/NoiseGateReleaseRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "120.0 ms"
+horizontal_alignment = 2
+
+[node name="NoiseGateHoldRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NoiseGateHold" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/NoiseGateHoldRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 2000.0
+step = 0.1
+value = 35.0
+
+[node name="NoiseGateHoldValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/NoiseGateHoldRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "35.0 ms"
+horizontal_alignment = 2
+
+[node name="NoiseGateFloorRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NoiseGateFloor" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/NoiseGateFloorRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -80.0
+max_value = 0.0
+step = 0.1
+value = -80.0
+
+[node name="NoiseGateFloorValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/NoiseGateFloorRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "-80.0 dB"
+horizontal_alignment = 2
+
 [node name="CompressorEnabled" type="CheckBox" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -177,6 +422,44 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 text = "-7.0 dB"
+horizontal_alignment = 2
+
+[node name="CompressorAttackRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CompressorAttackUs" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/CompressorAttackRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1e+06
+step = 100.0
+value = 2000.0
+
+[node name="CompressorAttackValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/CompressorAttackRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "2000 us"
+horizontal_alignment = 2
+
+[node name="CompressorReleaseRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CompressorReleaseUs" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/CompressorReleaseRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 5e+06
+step = 1000.0
+value = 120000.0
+
+[node name="CompressorReleaseValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox/CompressorReleaseRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+text = "120000 us"
 horizontal_alignment = 2
 
 [node name="AmplifyEnabled" type="CheckBox" parent="PanelContainer/MarginContainer/VBoxContainer/EffectsPanel/EffectsMargin/EffectsVBox"]
