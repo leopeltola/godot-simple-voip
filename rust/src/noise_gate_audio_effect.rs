@@ -61,21 +61,27 @@ pub(crate) struct AudioEffectNoiseGate {
     pub(crate) base: Base<AudioEffect>,
     /// Gate opens when signal level rises above this threshold.
     #[export]
+    #[var(get = get_threshold_db, set = set_threshold_db)]
     threshold_db: f32,
     /// Extra dB below threshold required to close the gate.
     #[export]
+    #[var(get = get_hysteresis_db, set = set_hysteresis_db)]
     hysteresis_db: f32,
     /// Time to open gate (gain increase), in milliseconds.
     #[export]
+    #[var(get = get_attack_ms, set = set_attack_ms)]
     attack_ms: f32,
     /// Time to close gate (gain decrease), in milliseconds.
     #[export]
+    #[var(get = get_release_ms, set = set_release_ms)]
     release_ms: f32,
     /// Time to keep gate open after signal falls below close threshold.
     #[export]
+    #[var(get = get_hold_ms, set = set_hold_ms)]
     hold_ms: f32,
     /// Gain floor while gate is closed (negative dB, e.g. -80.0).
     #[export]
+    #[var(get = get_floor_db, set = set_floor_db)]
     floor_db: f32,
     shared_config: NoiseGateSharedConfigRef,
 }
@@ -100,15 +106,7 @@ impl IAudioEffect for AudioEffectNoiseGate {
     }
 
     fn instantiate(&mut self) -> Option<Gd<AudioEffectInstance>> {
-        if let Ok(mut cfg) = self.shared_config.lock() {
-            cfg.params.threshold_db = self.threshold_db;
-            cfg.params.hysteresis_db = self.hysteresis_db.max(0.0);
-            cfg.params.attack_ms = self.attack_ms.max(0.0);
-            cfg.params.release_ms = self.release_ms.max(0.0);
-            cfg.params.hold_ms = self.hold_ms.max(0.0);
-            cfg.params.floor_db = self.floor_db.min(0.0);
-            cfg.revision = cfg.revision.wrapping_add(1);
-        }
+        self.push_config_to_shared();
 
         let mut effect = AudioEffectNoiseGateInstance::new_gd();
         {
@@ -121,7 +119,105 @@ impl IAudioEffect for AudioEffectNoiseGate {
 }
 
 #[godot_api]
-impl AudioEffectNoiseGate {}
+impl AudioEffectNoiseGate {
+    fn sanitize_hysteresis_db(value: f32) -> f32 {
+        value.max(0.0)
+    }
+
+    fn sanitize_attack_ms(value: f32) -> f32 {
+        value.max(0.0)
+    }
+
+    fn sanitize_release_ms(value: f32) -> f32 {
+        value.max(0.0)
+    }
+
+    fn sanitize_hold_ms(value: f32) -> f32 {
+        value.max(0.0)
+    }
+
+    fn sanitize_floor_db(value: f32) -> f32 {
+        value.min(0.0)
+    }
+
+    fn push_config_to_shared(&mut self) {
+        if let Ok(mut cfg) = self.shared_config.lock() {
+            cfg.params.threshold_db = self.threshold_db;
+            cfg.params.hysteresis_db = self.hysteresis_db;
+            cfg.params.attack_ms = self.attack_ms;
+            cfg.params.release_ms = self.release_ms;
+            cfg.params.hold_ms = self.hold_ms;
+            cfg.params.floor_db = self.floor_db;
+            cfg.revision = cfg.revision.wrapping_add(1);
+        }
+    }
+
+    #[func]
+    fn get_threshold_db(&self) -> f32 {
+        self.threshold_db
+    }
+
+    #[func]
+    fn set_threshold_db(&mut self, value: f32) {
+        self.threshold_db = value;
+        self.push_config_to_shared();
+    }
+
+    #[func]
+    fn get_hysteresis_db(&self) -> f32 {
+        self.hysteresis_db
+    }
+
+    #[func]
+    fn set_hysteresis_db(&mut self, value: f32) {
+        self.hysteresis_db = Self::sanitize_hysteresis_db(value);
+        self.push_config_to_shared();
+    }
+
+    #[func]
+    fn get_attack_ms(&self) -> f32 {
+        self.attack_ms
+    }
+
+    #[func]
+    fn set_attack_ms(&mut self, value: f32) {
+        self.attack_ms = Self::sanitize_attack_ms(value);
+        self.push_config_to_shared();
+    }
+
+    #[func]
+    fn get_release_ms(&self) -> f32 {
+        self.release_ms
+    }
+
+    #[func]
+    fn set_release_ms(&mut self, value: f32) {
+        self.release_ms = Self::sanitize_release_ms(value);
+        self.push_config_to_shared();
+    }
+
+    #[func]
+    fn get_hold_ms(&self) -> f32 {
+        self.hold_ms
+    }
+
+    #[func]
+    fn set_hold_ms(&mut self, value: f32) {
+        self.hold_ms = Self::sanitize_hold_ms(value);
+        self.push_config_to_shared();
+    }
+
+    #[func]
+    fn get_floor_db(&self) -> f32 {
+        self.floor_db
+    }
+
+    #[func]
+    fn set_floor_db(&mut self, value: f32) {
+        self.floor_db = Self::sanitize_floor_db(value);
+        self.push_config_to_shared();
+    }
+}
 
 #[derive(GodotClass)]
 #[class(base=AudioEffectInstance)]
