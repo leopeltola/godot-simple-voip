@@ -1,6 +1,7 @@
 use godot::prelude::*;
 
 mod deep_filter_net_audio_effect;
+mod noise_gate_audio_effect;
 mod opus_codec;
 mod resampler;
 mod rnnoise_audio_effect;
