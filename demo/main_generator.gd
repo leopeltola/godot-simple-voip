@@ -86,8 +86,9 @@ func _setup_opus_toggle() -> void:
 		_opus_toggle.disabled = true
 		return
 
-	_opus_toggle.button_pressed = VOIP.use_opus_compression
-	_log("Opus compression: %s" % _mode_text(VOIP.use_opus_compression))
+	var opus_enabled := VOIP.opus_compression_enabled
+	_opus_toggle.button_pressed = opus_enabled
+	_log("Opus compression: %s" % _mode_text(opus_enabled))
 
 
 func _setup_voip_stats_logging() -> void:
@@ -147,7 +148,7 @@ func _on_opus_toggled(enabled: bool) -> void:
 		_log_error("Opus toggle failed: VOIP singleton not found.")
 		return
 
-	VOIP.use_opus_compression = enabled
+	VOIP.opus_compression_enabled = enabled
 	_log("Opus compression: %s" % _mode_text(enabled))
 
 

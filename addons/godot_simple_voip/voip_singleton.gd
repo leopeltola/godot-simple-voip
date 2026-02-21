@@ -12,35 +12,22 @@ const BUS_NAME = "VOIP"
 ## will not send voice data to anyone.
 @export var sending_voice := true
 
-## If true, outgoing voice is Opus-compressed.
-## Disable for debugging to send raw PCM frames over RPC.
-@export var use_opus_compression := true
-
-## Capture ring buffer length in seconds.
-## Increase this for local multi-instance tests where one window is unfocused.
-@export_range(0.1, 5.0, 0.1) var capture_buffer_length_sec := 2.0
-
-## Emit per-second packet timing/count telemetry to help debug dropouts.
-@export var debug_packet_stats := true
-
-## Emit stage-isolation telemetry once per second.
-@export var debug_stage_isolation := true
-
-## Runtime-tweakable voice processing effect settings.
-@export var high_pass_enabled := true
-@export_range(20.0, 2000.0, 1.0) var high_pass_cutoff_hz := 100.0
-@export var low_pass_enabled := true
-@export_range(1000.0, 22000.0, 10.0) var low_pass_cutoff_hz := 16000.0
-@export var rnnoise_enabled := true
-@export var compressor_enabled := true
-@export_range(-60.0, 0.0, 0.1) var compressor_threshold_db := -7.0
-@export var amplify_enabled := true
-@export_range(-24.0, 24.0, 0.1) var amplify_db := 7.0
-@export var limiter_enabled := true
-
-## Max number of voice packets to send in a single frame when catching up
-## after frame hitches or background throttling.
-@export var max_packets_per_frame := 64
+## Internal runtime settings (kept off the exported singleton API).
+var opus_compression_enabled := true
+var _capture_buffer_length_sec := 2.0
+var _debug_packet_stats := true
+var _debug_stage_isolation := true
+var _high_pass_enabled := true
+var _high_pass_cutoff_hz := 100.0
+var _low_pass_enabled := true
+var _low_pass_cutoff_hz := 16000.0
+var _rnnoise_enabled := true
+var _compressor_enabled := true
+var _compressor_threshold_db := -7.0
+var _amplify_enabled := true
+var _amplify_db := 7.0
+var _limiter_enabled := true
+var _max_packets_per_frame := 64
 
 ## The peers whose peer_id is in peer_filter will not be sent voice data.
 ## Can be used to save bandwidth.
@@ -176,11 +163,11 @@ func _setup_bus() -> void:
 	
 	# Remove constant noise from the background
 	_high_pass = AudioEffectHighPassFilter.new()
-	_high_pass.cutoff_hz = high_pass_cutoff_hz
+	_high_pass.cutoff_hz = _high_pass_cutoff_hz
 	AudioServer.add_bus_effect(_bus_idx, _high_pass)
 	
 	_low_pass = AudioEffectLowPassFilter.new()
-	_low_pass.cutoff_hz = low_pass_cutoff_hz
+	_low_pass.cutoff_hz = _low_pass_cutoff_hz
 	AudioServer.add_bus_effect(_bus_idx, _low_pass)
 	
 	# Remove noise using neural network
@@ -189,13 +176,13 @@ func _setup_bus() -> void:
 	
 	# Compress the louder sounds to be quieter
 	_compressor = AudioEffectCompressor.new()
-	_compressor.threshold = compressor_threshold_db
+	_compressor.threshold = _compressor_threshold_db
 	_compressor.attack_us = 2000
 	AudioServer.add_bus_effect(_bus_idx, _compressor)
 	
 	# Amplify everything to offset the compression
 	_amplify = AudioEffectAmplify.new()
-	_amplify.volume_db = amplify_db
+	_amplify.volume_db = _amplify_db
 	AudioServer.add_bus_effect(_bus_idx, _amplify)
 	
 	# Ensure no clipping
@@ -204,7 +191,7 @@ func _setup_bus() -> void:
 	
 	# For capturing the mic input
 	_capture = AudioEffectCapture.new()
-	_capture.buffer_length = capture_buffer_length_sec
+	_capture.buffer_length = _capture_buffer_length_sec
 	AudioServer.add_bus_effect(_bus_idx, _capture)
 	
 	# Silence the player's own mic locally after it's been captured
@@ -220,12 +207,12 @@ func _verify_and_add_capture() -> void:
 	for i in range(AudioServer.get_bus_effect_count(_bus_idx)):
 		if AudioServer.get_bus_effect(_bus_idx, i) is AudioEffectCapture:
 			_capture = AudioServer.get_bus_effect(_bus_idx, i)
-			_capture.buffer_length = capture_buffer_length_sec
+			_capture.buffer_length = _capture_buffer_length_sec
 			return
 	
 	# Add capture if it doesn't exist
 	_capture = AudioEffectCapture.new()
-	_capture.buffer_length = capture_buffer_length_sec
+	_capture.buffer_length = _capture_buffer_length_sec
 	AudioServer.add_bus_effect(_bus_idx, _capture)
 
 
@@ -255,60 +242,31 @@ func _cache_existing_effects() -> void:
 			_limiter = effect as AudioEffectHardLimiter
 
 
-func get_effect_runtime_config() -> Dictionary:
-	return {
-		"high_pass_enabled": high_pass_enabled,
-		"high_pass_cutoff_hz": high_pass_cutoff_hz,
-		"low_pass_enabled": low_pass_enabled,
-		"low_pass_cutoff_hz": low_pass_cutoff_hz,
-		"rnnoise_enabled": rnnoise_enabled,
-		"compressor_enabled": compressor_enabled,
-		"compressor_threshold_db": compressor_threshold_db,
-		"amplify_enabled": amplify_enabled,
-		"amplify_db": amplify_db,
-		"limiter_enabled": limiter_enabled,
-	}
-
-
-func set_effect_runtime_config(config: Dictionary) -> void:
-	high_pass_enabled = bool(config.get("high_pass_enabled", high_pass_enabled))
-	high_pass_cutoff_hz = float(config.get("high_pass_cutoff_hz", high_pass_cutoff_hz))
-	low_pass_enabled = bool(config.get("low_pass_enabled", low_pass_enabled))
-	low_pass_cutoff_hz = float(config.get("low_pass_cutoff_hz", low_pass_cutoff_hz))
-	rnnoise_enabled = bool(config.get("rnnoise_enabled", rnnoise_enabled))
-	compressor_enabled = bool(config.get("compressor_enabled", compressor_enabled))
-	compressor_threshold_db = float(config.get("compressor_threshold_db", compressor_threshold_db))
-	amplify_enabled = bool(config.get("amplify_enabled", amplify_enabled))
-	amplify_db = float(config.get("amplify_db", amplify_db))
-	limiter_enabled = bool(config.get("limiter_enabled", limiter_enabled))
-	_apply_runtime_effect_config()
-
-
 func _apply_runtime_effect_config() -> void:
 	if _bus_idx == -1:
 		return
 
-	high_pass_cutoff_hz = clampf(high_pass_cutoff_hz, 20.0, 2000.0)
-	low_pass_cutoff_hz = clampf(low_pass_cutoff_hz, 1000.0, 22000.0)
-	compressor_threshold_db = clampf(compressor_threshold_db, -60.0, 0.0)
-	amplify_db = clampf(amplify_db, -24.0, 24.0)
+	_high_pass_cutoff_hz = clampf(_high_pass_cutoff_hz, 20.0, 2000.0)
+	_low_pass_cutoff_hz = clampf(_low_pass_cutoff_hz, 1000.0, 22000.0)
+	_compressor_threshold_db = clampf(_compressor_threshold_db, -60.0, 0.0)
+	_amplify_db = clampf(_amplify_db, -24.0, 24.0)
 
 	if _high_pass != null:
-		_high_pass.cutoff_hz = high_pass_cutoff_hz
-		_set_effect_enabled(_high_pass, high_pass_enabled)
+		_high_pass.cutoff_hz = _high_pass_cutoff_hz
+		_set_effect_enabled(_high_pass, _high_pass_enabled)
 	if _low_pass != null:
-		_low_pass.cutoff_hz = low_pass_cutoff_hz
-		_set_effect_enabled(_low_pass, low_pass_enabled)
+		_low_pass.cutoff_hz = _low_pass_cutoff_hz
+		_set_effect_enabled(_low_pass, _low_pass_enabled)
 	if _rnnoise != null:
-		_set_effect_enabled(_rnnoise, rnnoise_enabled)
+		_set_effect_enabled(_rnnoise, _rnnoise_enabled)
 	if _compressor != null:
-		_compressor.threshold = compressor_threshold_db
-		_set_effect_enabled(_compressor, compressor_enabled)
+		_compressor.threshold = _compressor_threshold_db
+		_set_effect_enabled(_compressor, _compressor_enabled)
 	if _amplify != null:
-		_amplify.volume_db = amplify_db
-		_set_effect_enabled(_amplify, amplify_enabled)
+		_amplify.volume_db = _amplify_db
+		_set_effect_enabled(_amplify, _amplify_enabled)
 	if _limiter != null:
-		_set_effect_enabled(_limiter, limiter_enabled)
+		_set_effect_enabled(_limiter, _limiter_enabled)
 
 
 func _set_effect_enabled(effect: AudioEffect, enabled: bool) -> void:
@@ -396,7 +354,7 @@ func _refresh_stream_bindings() -> void:
 
 
 func _collect_playback_stage_stats() -> void:
-	if not debug_stage_isolation:
+	if not _debug_stage_isolation:
 		return
 
 	for player in _voip_players:
@@ -440,7 +398,7 @@ func _process_voice() -> void:
 		return
 
 	var packets_sent_this_frame := 0
-	while _available_voice_frames() >= _input_packet_frames and packets_sent_this_frame < max_packets_per_frame:
+	while _available_voice_frames() >= _input_packet_frames and packets_sent_this_frame < _max_packets_per_frame:
 		_send_next_packet()
 		packets_sent_this_frame += 1
 
@@ -459,7 +417,7 @@ func _send_next_packet() -> void:
 	var seq := _next_send_seq
 	_next_send_seq += 1
 
-	if use_opus_compression:
+	if opus_compression_enabled:
 		var opus_data: PackedByteArray = _encode_opus.encode_with_sample_rate(input_chunk, _input_sample_rate)
 		if opus_data.is_empty():
 			return
@@ -581,7 +539,7 @@ func _get_decoder_for_peer(peer_id: int) -> OpusCodec:
 
 
 func _track_recv_sequence(sender_id: int, seq: int) -> void:
-	if not debug_stage_isolation:
+	if not _debug_stage_isolation:
 		return
 
 	if not _recv_seq_last_by_peer.has(sender_id):
@@ -603,7 +561,7 @@ func _track_recv_sequence(sender_id: int, seq: int) -> void:
 
 
 func _track_send_level(pcm_data: PackedVector2Array) -> void:
-	if not debug_stage_isolation or pcm_data.is_empty():
+	if not _debug_stage_isolation or pcm_data.is_empty():
 		return
 	var level := _measure_level(pcm_data)
 	_stats_send_level_rms_sum += float(level.get("rms", 0.0))
@@ -612,7 +570,7 @@ func _track_send_level(pcm_data: PackedVector2Array) -> void:
 
 
 func _track_recv_level(pcm_data: PackedVector2Array) -> void:
-	if not debug_stage_isolation or pcm_data.is_empty():
+	if not _debug_stage_isolation or pcm_data.is_empty():
 		return
 	var level := _measure_level(pcm_data)
 	_stats_recv_level_rms_sum += float(level.get("rms", 0.0))
@@ -711,7 +669,7 @@ func _mark_recv_timing() -> void:
 
 
 func _update_debug_stats(delta: float) -> void:
-	if not debug_packet_stats:
+	if not _debug_packet_stats:
 		return
 
 	_stats_sec_accum += delta
@@ -745,7 +703,7 @@ func _update_debug_stats(delta: float) -> void:
 		snapshot["process_gap_over_100ms"],
 	])
 
-	if debug_stage_isolation:
+	if _debug_stage_isolation:
 		print("[VOIP stage] role=%s cap_poll=%d nz=%d empty=%d cap_frames=%d send_q=%d send_seq(gap/reorder/dup)=%d/%d/%d send_lvl(rms/peak)=%.4f/%.4f recv_lvl(rms/peak)=%.4f/%.4f play(chunks in/out pending drop start underrun)=%d %d/%d %d %d %d %d" % [
 			snapshot["role"],
 			snapshot["capture_polls"],
@@ -800,7 +758,7 @@ func _build_stats_snapshot() -> Dictionary:
 
 	return {
 		"role": "server" if multiplayer.is_server() else "client",
-		"mode": "opus" if use_opus_compression else "pcm",
+		"mode": "opus" if opus_compression_enabled else "pcm",
 		"capture_frames": _stats_capture_frames,
 		"sent_packets": _stats_sent_packets,
 		"sent_bytes": _stats_sent_bytes,

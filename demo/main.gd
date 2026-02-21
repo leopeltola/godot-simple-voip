@@ -93,8 +93,9 @@ func _setup_opus_toggle() -> void:
 		_opus_toggle.disabled = true
 		return
 
-	_opus_toggle.button_pressed = VOIP.use_opus_compression
-	_log("Opus compression: %s" % (_mode_text(VOIP.use_opus_compression)))
+	var opus_enabled := VOIP.opus_compression_enabled
+	_opus_toggle.button_pressed = opus_enabled
+	_log("Opus compression: %s" % (_mode_text(opus_enabled)))
 
 
 func _setup_effect_controls() -> void:
@@ -102,7 +103,7 @@ func _setup_effect_controls() -> void:
 		_set_effect_controls_enabled(false)
 		return
 
-	_apply_effect_config_to_controls(VOIP.get_effect_runtime_config())
+	_apply_effect_config_to_controls(_read_effect_runtime_config_from_bus())
 
 	_high_pass_enabled.toggled.connect(_on_effect_control_changed)
 	_low_pass_enabled.toggled.connect(_on_effect_control_changed)
@@ -173,7 +174,7 @@ func _push_effect_runtime_config() -> void:
 		return
 
 	var config := _collect_effect_runtime_config_from_controls()
-	VOIP.set_effect_runtime_config(config)
+	_apply_effect_runtime_config_to_bus(config)
 
 	if multiplayer.multiplayer_peer != null and multiplayer.is_server():
 		_rpc_apply_effect_runtime_config.rpc(config)
@@ -210,6 +211,123 @@ func _apply_effect_config_to_controls(config: Dictionary) -> void:
 	_refresh_effect_value_labels()
 
 
+func _read_effect_runtime_config_from_bus() -> Dictionary:
+	var bus_idx := AudioServer.get_bus_index("VOIP")
+	if bus_idx == -1:
+		return _collect_effect_runtime_config_from_controls()
+
+	var high_pass: AudioEffectHighPassFilter = null
+	var low_pass: AudioEffectLowPassFilter = null
+	var rnnoise: AudioEffectRNNoise = null
+	var compressor: AudioEffectCompressor = null
+	var amplify: AudioEffectAmplify = null
+	var limiter: AudioEffectHardLimiter = null
+
+	for i in range(AudioServer.get_bus_effect_count(bus_idx)):
+		var effect := AudioServer.get_bus_effect(bus_idx, i)
+		if effect is AudioEffectHighPassFilter and high_pass == null:
+			high_pass = effect as AudioEffectHighPassFilter
+		elif effect is AudioEffectLowPassFilter and low_pass == null:
+			low_pass = effect as AudioEffectLowPassFilter
+		elif effect is AudioEffectRNNoise and rnnoise == null:
+			rnnoise = effect as AudioEffectRNNoise
+		elif effect is AudioEffectCompressor and compressor == null:
+			compressor = effect as AudioEffectCompressor
+		elif effect is AudioEffectAmplify:
+			var amp := effect as AudioEffectAmplify
+			if amplify == null or amp.volume_db > amplify.volume_db:
+				amplify = amp
+		elif effect is AudioEffectHardLimiter and limiter == null:
+			limiter = effect as AudioEffectHardLimiter
+
+	return {
+		"high_pass_enabled": _is_bus_effect_enabled(bus_idx, high_pass, true),
+		"high_pass_cutoff_hz": high_pass.cutoff_hz if high_pass != null else 100.0,
+		"low_pass_enabled": _is_bus_effect_enabled(bus_idx, low_pass, true),
+		"low_pass_cutoff_hz": low_pass.cutoff_hz if low_pass != null else 16000.0,
+		"rnnoise_enabled": _is_bus_effect_enabled(bus_idx, rnnoise, true),
+		"compressor_enabled": _is_bus_effect_enabled(bus_idx, compressor, true),
+		"compressor_threshold_db": compressor.threshold if compressor != null else -7.0,
+		"amplify_enabled": _is_bus_effect_enabled(bus_idx, amplify, true),
+		"amplify_db": amplify.volume_db if amplify != null else 7.0,
+		"limiter_enabled": _is_bus_effect_enabled(bus_idx, limiter, true),
+	}
+
+
+func _apply_effect_runtime_config_to_bus(config: Dictionary) -> void:
+	var bus_idx := AudioServer.get_bus_index("VOIP")
+	if bus_idx == -1:
+		return
+
+	var high_pass: AudioEffectHighPassFilter = null
+	var low_pass: AudioEffectLowPassFilter = null
+	var rnnoise: AudioEffectRNNoise = null
+	var compressor: AudioEffectCompressor = null
+	var amplify: AudioEffectAmplify = null
+	var limiter: AudioEffectHardLimiter = null
+
+	for i in range(AudioServer.get_bus_effect_count(bus_idx)):
+		var effect := AudioServer.get_bus_effect(bus_idx, i)
+		if effect is AudioEffectHighPassFilter and high_pass == null:
+			high_pass = effect as AudioEffectHighPassFilter
+		elif effect is AudioEffectLowPassFilter and low_pass == null:
+			low_pass = effect as AudioEffectLowPassFilter
+		elif effect is AudioEffectRNNoise and rnnoise == null:
+			rnnoise = effect as AudioEffectRNNoise
+		elif effect is AudioEffectCompressor and compressor == null:
+			compressor = effect as AudioEffectCompressor
+		elif effect is AudioEffectAmplify:
+			var amp := effect as AudioEffectAmplify
+			if amplify == null or amp.volume_db > amplify.volume_db:
+				amplify = amp
+		elif effect is AudioEffectHardLimiter and limiter == null:
+			limiter = effect as AudioEffectHardLimiter
+
+	if high_pass != null:
+		high_pass.cutoff_hz = clampf(float(config.get("high_pass_cutoff_hz", high_pass.cutoff_hz)), 20.0, 2000.0)
+		_set_bus_effect_enabled(bus_idx, high_pass, bool(config.get("high_pass_enabled", true)))
+	if low_pass != null:
+		low_pass.cutoff_hz = clampf(float(config.get("low_pass_cutoff_hz", low_pass.cutoff_hz)), 1000.0, 22000.0)
+		_set_bus_effect_enabled(bus_idx, low_pass, bool(config.get("low_pass_enabled", true)))
+	if rnnoise != null:
+		_set_bus_effect_enabled(bus_idx, rnnoise, bool(config.get("rnnoise_enabled", true)))
+	if compressor != null:
+		compressor.threshold = clampf(float(config.get("compressor_threshold_db", compressor.threshold)), -60.0, 0.0)
+		_set_bus_effect_enabled(bus_idx, compressor, bool(config.get("compressor_enabled", true)))
+	if amplify != null:
+		amplify.volume_db = clampf(float(config.get("amplify_db", amplify.volume_db)), -24.0, 24.0)
+		_set_bus_effect_enabled(bus_idx, amplify, bool(config.get("amplify_enabled", true)))
+	if limiter != null:
+		_set_bus_effect_enabled(bus_idx, limiter, bool(config.get("limiter_enabled", true)))
+
+
+func _is_bus_effect_enabled(bus_idx: int, effect: AudioEffect, default_value: bool) -> bool:
+	if effect == null:
+		return default_value
+	var effect_idx := _find_effect_index(bus_idx, effect)
+	if effect_idx == -1:
+		return default_value
+	return AudioServer.is_bus_effect_enabled(bus_idx, effect_idx)
+
+
+func _set_bus_effect_enabled(bus_idx: int, effect: AudioEffect, enabled: bool) -> void:
+	if effect == null:
+		return
+	var effect_idx := _find_effect_index(bus_idx, effect)
+	if effect_idx == -1:
+		return
+	AudioServer.set_bus_effect_enabled(bus_idx, effect_idx, enabled)
+
+
+func _find_effect_index(bus_idx: int, effect: AudioEffect) -> int:
+	if effect == null:
+		return -1
+	for i in range(AudioServer.get_bus_effect_count(bus_idx)):
+		if AudioServer.get_bus_effect(bus_idx, i) == effect:
+			return i
+	return -1
+
+
 func _can_edit_effect_controls() -> bool:
 	if multiplayer.multiplayer_peer == null:
 		return true
@@ -229,14 +347,14 @@ func _rpc_request_effect_runtime_config() -> void:
 	var requester_id := multiplayer.get_remote_sender_id()
 	if requester_id == 0:
 		return
-	_rpc_apply_effect_runtime_config.rpc_id(requester_id, VOIP.get_effect_runtime_config())
+	_rpc_apply_effect_runtime_config.rpc_id(requester_id, _read_effect_runtime_config_from_bus())
 
 
 @rpc("authority", "reliable", "call_remote")
 func _rpc_apply_effect_runtime_config(config: Dictionary) -> void:
 	if not has_node("/root/VOIP"):
 		return
-	VOIP.set_effect_runtime_config(config)
+	_apply_effect_runtime_config_to_bus(config)
 	_apply_effect_config_to_controls(config)
 
 
@@ -292,7 +410,7 @@ func _on_opus_toggled(enabled: bool) -> void:
 		_log_error("Opus toggle failed: VOIP singleton not found.")
 		return
 
-	VOIP.use_opus_compression = enabled
+	VOIP.opus_compression_enabled = enabled
 	_log("Opus compression: %s" % _mode_text(enabled))
 
 
@@ -351,7 +469,7 @@ func disconnect_current_peer(log_reason: bool = true) -> void:
 	_update_peer_count()
 	_update_connection_ui()
 	if has_node("/root/VOIP"):
-		_apply_effect_config_to_controls(VOIP.get_effect_runtime_config())
+		_apply_effect_config_to_controls(_read_effect_runtime_config_from_bus())
 
 	if log_reason:
 		_log("Disconnected.")
@@ -381,7 +499,7 @@ func _on_peer_connected(peer_id: int) -> void:
 	_update_peer_count()
 	_log("Peer connected: %d" % peer_id)
 	if multiplayer.is_server() and has_node("/root/VOIP"):
-		_rpc_apply_effect_runtime_config.rpc_id(peer_id, VOIP.get_effect_runtime_config())
+		_rpc_apply_effect_runtime_config.rpc_id(peer_id, _read_effect_runtime_config_from_bus())
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
