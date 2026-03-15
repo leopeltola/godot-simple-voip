@@ -38,17 +38,27 @@ jobs:
         shell: pwsh
         run: |
           $tag = "${{ env.RELEASE_TAG }}"
+          $pluginVersion = $tag -replace '^v', ''
           $archiveName = "godot-simple-voip-$tag.zip"
           $packageRoot = "godot-simple-voip-$tag"
           $stagingDir = Join-Path $env:RUNNER_TEMP $packageRoot
           $addonDir = Join-Path $stagingDir "addons/godot_simple_voip"
           $addonBinDir = Join-Path $addonDir "bin"
+          $pluginCfgPath = Join-Path $addonDir "plugin.cfg"
           $releaseDll = "rust/target/release/simple_voip.dll"
 
           New-Item -ItemType Directory -Path $addonDir -Force | Out-Null
           New-Item -ItemType Directory -Path $addonBinDir -Force | Out-Null
 
           Copy-Item -Path "addons/godot_simple_voip/*" -Destination $addonDir -Recurse -Force
+
+          if (-not (Test-Path $pluginCfgPath)) {
+            throw "Expected plugin config not found at '$pluginCfgPath'"
+          }
+
+          $pluginCfgContent = Get-Content -Path $pluginCfgPath
+          $pluginCfgContent = $pluginCfgContent -replace '^version=".*"$', "version=\"$pluginVersion\""
+          Set-Content -Path $pluginCfgPath -Value $pluginCfgContent
 
           if (-not (Test-Path $releaseDll)) {
             throw "Expected release DLL not found at '$releaseDll'"
