@@ -1,6 +1,14 @@
 extends AudioStreamGenerator
 class_name AudioStreamVOIP
 
+## Audio stream resource that buffers and plays voice from a specific network peer.
+##
+## Use this stream to output one remote peer's
+## voice. Assign it to an [AudioStreamPlayer], [AudioStreamPlayer2D], or
+## [AudioStreamPlayer3D], set [member peer_id], and start playback.
+##[br][br]
+## The stream handles short buffering internally to keep voice playback smooth.
+
 ## Which peer's voice should be played through this stream.
 @export var peer_id: int = 0:
 	set(value):
@@ -41,11 +49,20 @@ func _notification(what: int) -> void:
 		_set_voice_signal_enabled(false)
 
 
+## Binds the stream to an active generator playback instance.
+##
+## This is usually managed automatically by the VOIP singleton.
 func bind_playback(playback: AudioStreamGeneratorPlayback) -> void:
 	_playback = playback
 	_flush_pending_to_playback()
 
 
+## Configures stream timing to match incoming voice packet cadence.
+##
+## Most projects should not need to call this directly.
+##
+## [param sample_rate] should match your project's output mix rate.
+## [param frame_size] should match the VOIP packet frame size.
 func configure_stream(sample_rate: int, frame_size: int) -> void:
 	if sample_rate <= 0 or frame_size <= 0:
 		return
@@ -59,6 +76,9 @@ func configure_stream(sample_rate: int, frame_size: int) -> void:
 	_max_pending_frames = _sample_rate
 
 
+## Pushes pending buffered frames into the playback ring buffer.
+##
+## Usually called automatically by the VOIP singleton each frame.
 func pump_playback() -> void:
 	_flush_pending_to_playback()
 
@@ -116,6 +136,9 @@ func _flush_pending_to_playback() -> void:
 	_compact_pending_if_needed()
 
 
+## Returns and clears per-window playback debug counters.
+##
+## Useful when profiling stutter, delay, or underruns in voice playback.
 func consume_debug_playback_snapshot() -> Dictionary:
 	var snapshot := {
 		"peer_id": peer_id,

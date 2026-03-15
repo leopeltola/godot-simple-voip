@@ -1,21 +1,32 @@
 extends Node
-class_name VOIPSingleton
+
+## VOIP Singleton for SimpleVOIP addon.
+##
+##[br][br]
+## Captures local microphone audio, sends it to connected peers, receives
+## remote voice, and emits [signal peer_voice_data_received] so
+## [AudioStreamVOIP] resources can play it.
+##[br][br]
+## In most cases, you only need to configure [member sending_voice], create
+## a [AudioStreamPlayer], and assing a [AudioStreamVOIP] to it.
 
 ## Emitted when new voice data is received from a peer.
 signal peer_voice_data_received(peer_id: int, pcm_data: PackedVector2Array)
+## Emitted once per debug window with the latest telemetry snapshot.
 signal debug_stats_updated(stats: Dictionary)
 
 ## VOIP will automatically create an audio bus with this name if it doesn't exist.
 const BUS_NAME = "VOIP"
 
-## Whether voice should be sent to peers. If false, this client
+## Whether voice should be sent to peers. If false, this peer
 ## will not send voice data to anyone.
 @export var sending_voice := true
 
 ## Automatically route the local microphone into the VOIP bus.
 @export var auto_capture_microphone := true
 
-## Internal runtime settings (kept off the exported singleton API).
+# Internal runtime settings (kept off the exported singleton API).
+## Whether Opus compression is used for network transport.
 var opus_compression_enabled := true
 var _capture_buffer_length_sec := 2.0
 var _debug_packet_stats := false
@@ -58,7 +69,7 @@ var _output_packet_frames := 960
 
 var _voice_buffer: PackedVector2Array = []
 var _voice_read_pos := 0
-var _voip_players: Array[AudioStreamPlayer] = []
+var _voip_players: Array[Node] = []
 
 var _stats_sec_accum := 0.0
 
@@ -115,8 +126,11 @@ var _process_dt_max := 0.0
 var _last_process_ts := -1.0
 var _process_gap_over_100ms := 0
 
+## Network sample rate used by the packet contract.
 const NETWORK_SAMPLE_RATE := 48_000
+## Network packet size in frames.
 const VOIP_PACKET_FRAMES := 960
+## Network packet duration in seconds.
 const VOIP_PACKET_SEC := 0.02
 
 func _ready() -> void:
@@ -141,10 +155,12 @@ func _ready() -> void:
 	get_tree().node_added.connect(_on_node_added)
 
 
+## Returns the Opus codec sample rate used for network packets.
 func get_opus_sample_rate() -> int:
 	return _opus_sample_rate
 
 
+## Returns the Opus frame size in samples per packet (per channel frame count).
 func get_opus_frame_size() -> int:
 	return _opus_frame_size
 
@@ -313,11 +329,11 @@ func _process(delta: float) -> void:
 
 
 func _on_node_added(node: Node) -> void:
-	if node is AudioStreamPlayer:
-		var player := node as AudioStreamPlayer
-		if player.stream is AudioStreamVOIP and not _voip_players.has(player):
-			_voip_players.append(player)
-		if auto_capture_microphone and _is_microphone_capture_player(player) and player != _mic_capture_player:
+	if _is_supported_stream_player(node):
+		var stream := _get_player_stream(node)
+		if stream is AudioStreamVOIP and not _voip_players.has(node):
+			_voip_players.append(node)
+		if auto_capture_microphone and _is_microphone_capture_player(node) and node != _mic_capture_player:
 			_disable_internal_microphone_capture()
 
 
@@ -351,12 +367,59 @@ func _disable_internal_microphone_capture() -> void:
 	_mic_capture_player = null
 
 
-func _is_microphone_capture_player(player: AudioStreamPlayer) -> bool:
+func _is_microphone_capture_player(player: Node) -> bool:
 	if player == null:
 		return false
-	if not (player.stream is AudioStreamMicrophone):
+	if not _is_supported_stream_player(player):
 		return false
-	return player.bus == BUS_NAME
+	var stream := _get_player_stream(player)
+	if not (stream is AudioStreamMicrophone):
+		return false
+	return _get_player_bus(player) == BUS_NAME
+
+
+func _is_supported_stream_player(node: Node) -> bool:
+	return node is AudioStreamPlayer or node is AudioStreamPlayer2D or node is AudioStreamPlayer3D
+
+
+func _get_player_stream(player: Node) -> AudioStream:
+	if player is AudioStreamPlayer:
+		return (player as AudioStreamPlayer).stream
+	if player is AudioStreamPlayer2D:
+		return (player as AudioStreamPlayer2D).stream
+	if player is AudioStreamPlayer3D:
+		return (player as AudioStreamPlayer3D).stream
+	return null
+
+
+func _get_player_bus(player: Node) -> StringName:
+	if player is AudioStreamPlayer:
+		return (player as AudioStreamPlayer).bus
+	if player is AudioStreamPlayer2D:
+		return (player as AudioStreamPlayer2D).bus
+	if player is AudioStreamPlayer3D:
+		return (player as AudioStreamPlayer3D).bus
+	return StringName("")
+
+
+func _is_player_playing(player: Node) -> bool:
+	if player is AudioStreamPlayer:
+		return (player as AudioStreamPlayer).playing
+	if player is AudioStreamPlayer2D:
+		return (player as AudioStreamPlayer2D).playing
+	if player is AudioStreamPlayer3D:
+		return (player as AudioStreamPlayer3D).playing
+	return false
+
+
+func _get_player_playback(player: Node) -> AudioStreamPlayback:
+	if player is AudioStreamPlayer:
+		return (player as AudioStreamPlayer).get_stream_playback()
+	if player is AudioStreamPlayer2D:
+		return (player as AudioStreamPlayer2D).get_stream_playback()
+	if player is AudioStreamPlayer3D:
+		return (player as AudioStreamPlayer3D).get_stream_playback()
+	return null
 
 
 func _track_existing_players() -> void:
@@ -364,10 +427,10 @@ func _track_existing_players() -> void:
 
 
 func _collect_voip_players(node: Node) -> void:
-	if node is AudioStreamPlayer:
-		var player := node as AudioStreamPlayer
-		if player.stream is AudioStreamVOIP and not _voip_players.has(player):
-			_voip_players.append(player)
+	if _is_supported_stream_player(node):
+		var stream := _get_player_stream(node)
+		if stream is AudioStreamVOIP and not _voip_players.has(node):
+			_voip_players.append(node)
 
 	for child in node.get_children():
 		if child is Node:
@@ -381,20 +444,28 @@ func _refresh_stream_bindings() -> void:
 			_voip_players.remove_at(i)
 			continue
 
-		if not (player.stream is AudioStreamVOIP):
+		if not _is_supported_stream_player(player):
 			_voip_players.remove_at(i)
 			continue
 
-		if not player.playing:
+		var stream_ref := _get_player_stream(player)
+		if not (stream_ref is AudioStreamVOIP):
+			_voip_players.remove_at(i)
 			continue
 
-		var playback := player.get_stream_playback()
+		if not _is_player_playing(player):
+			continue
+
+		var playback := _get_player_playback(player)
 		if playback == null:
 			continue
+		var generator_playback := playback as AudioStreamGeneratorPlayback
+		if generator_playback == null:
+			continue
 
-		var stream := player.stream as AudioStreamVOIP
+		var stream := stream_ref as AudioStreamVOIP
 		stream.configure_stream(_output_sample_rate, _output_packet_frames)
-		stream.bind_playback(playback)
+		stream.bind_playback(generator_playback)
 		stream.pump_playback()
 
 
@@ -405,9 +476,10 @@ func _collect_playback_stage_stats() -> void:
 	for player in _voip_players:
 		if not is_instance_valid(player):
 			continue
-		if not (player.stream is AudioStreamVOIP):
+		var stream_ref := _get_player_stream(player)
+		if not (stream_ref is AudioStreamVOIP):
 			continue
-		var stream := player.stream as AudioStreamVOIP
+		var stream := stream_ref as AudioStreamVOIP
 		var snap := stream.consume_debug_playback_snapshot()
 		_stats_playback_chunks += int(snap.get("chunks_received", 0))
 		_stats_playback_frames_in += int(snap.get("frames_received", 0))
@@ -687,6 +759,10 @@ func _resample_from_network_packet(network_frames: PackedVector2Array) -> Packed
 	return resampled
 
 
+## Returns a snapshot of current debug and pipeline statistics.
+##
+## The returned dictionary uses the same keys as
+## [signal debug_stats_updated].
 func get_debug_stats_snapshot() -> Dictionary:
 	return _build_stats_snapshot()
 
