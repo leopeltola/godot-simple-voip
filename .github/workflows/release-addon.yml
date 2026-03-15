@@ -30,6 +30,14 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Rust build artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rust -> target
+          shared-key: release-addon-windows
+          cache-on-failure: true
+
       - name: Build Rust release library
         run: cargo build --release --manifest-path rust/Cargo.toml
 
