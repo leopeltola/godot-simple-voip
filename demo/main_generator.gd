@@ -11,7 +11,6 @@ const PORT := 25562
 @onready var _peers_label: Label = %PeersLabel
 @onready var _log_label: RichTextLabel = %LogLabel
 
-var _mic_player: AudioStreamPlayer = null
 var _peer_audio: Dictionary = {}
 
 var _sample_rate := 48_000
@@ -27,7 +26,6 @@ func _ready() -> void:
 	_setup_voip_stats_logging()
 	_warn_if_low_processor_mode()
 	_apply_cli_mute_if_requested()
-	_setup_microphone_capture()
 	_set_status("Idle")
 	_update_peer_count()
 	_log("Generator demo ready. Host or join to start VOIP.")
@@ -114,19 +112,6 @@ func _on_voip_stats_updated(stats: Dictionary) -> void:
 		float(stats.get("process_dt_max_ms", 0.0)),
 		int(stats.get("process_gap_over_100ms", 0)),
 	])
-
-
-func _setup_microphone_capture() -> void:
-	if not has_node("/root/VOIP"):
-		return
-
-	_mic_player = AudioStreamPlayer.new()
-	_mic_player.name = "LocalMicrophone"
-	_mic_player.stream = AudioStreamMicrophone.new()
-	_mic_player.bus = "VOIP"
-	add_child(_mic_player)
-	_mic_player.play()
-	_log("Local microphone routed to VOIP bus.")
 
 
 func _apply_cli_mute_if_requested() -> void:

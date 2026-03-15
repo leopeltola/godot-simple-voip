@@ -19,6 +19,7 @@ The plugin automatically registers a global `VOIP` singleton that handles all vo
 #### Properties
 
 - `sending_voice: bool` - Enable/disable sending voice to peers (default: true)
+- `auto_capture_microphone: bool` - Automatically creates a hidden microphone player routed to the VOIP bus (default: true)
 - `peer_filter: Array[int]` - List of peer IDs that won't receive your voice (for bandwidth optimization)
 
 #### Signals

@@ -57,7 +57,6 @@ const PORT := 25562
 @onready var _log_label: RichTextLabel = %LogLabel
 
 var _voip_players: Dictionary = {}
-var _mic_player: AudioStreamPlayer = null
 var _updating_effect_controls := false
 
 
@@ -70,7 +69,6 @@ func _ready() -> void:
 	_setup_voip_stats_logging()
 	_warn_if_low_processor_mode()
 	_apply_cli_mute_if_requested()
-	_setup_microphone_capture()
 	_set_status("Idle")
 	_update_peer_count()
 	_log("Demo ready. Host or join to start VOIP.")
@@ -640,20 +638,6 @@ func _wire_multiplayer_signals() -> void:
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-
-
-func _setup_microphone_capture() -> void:
-	if not has_node("/root/VOIP"):
-		_log_error("VOIP singleton not found. Enable the plugin first.")
-		return
-
-	_mic_player = AudioStreamPlayer.new()
-	_mic_player.name = "LocalMicrophone"
-	_mic_player.stream = AudioStreamMicrophone.new()
-	_mic_player.bus = "VOIP"
-	add_child(_mic_player)
-	_mic_player.play()
-	_log("Local microphone routed to VOIP bus.")
 
 
 func _on_opus_toggled(enabled: bool) -> void:

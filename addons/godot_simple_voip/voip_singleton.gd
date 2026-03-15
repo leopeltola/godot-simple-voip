@@ -12,11 +12,14 @@ const BUS_NAME = "VOIP"
 ## will not send voice data to anyone.
 @export var sending_voice := true
 
+## Automatically route the local microphone into the VOIP bus.
+@export var auto_capture_microphone := true
+
 ## Internal runtime settings (kept off the exported singleton API).
 var opus_compression_enabled := true
 var _capture_buffer_length_sec := 2.0
-var _debug_packet_stats := true
-var _debug_stage_isolation := true
+var _debug_packet_stats := false
+var _debug_stage_isolation := false
 var _high_pass_enabled := true
 var _high_pass_cutoff_hz := 100.0
 var _low_pass_enabled := true
@@ -34,6 +37,7 @@ var _max_packets_per_frame := 64
 @export var peer_filter: Array[int] = []
 
 var _bus_idx := -1
+var _mic_capture_player: AudioStreamPlayer = null
 var _capture: AudioEffectCapture = null
 var _high_pass: AudioEffectHighPassFilter = null
 var _low_pass: AudioEffectLowPassFilter = null
@@ -132,6 +136,7 @@ func _ready() -> void:
 		_output_sample_rate = _opus_sample_rate
 	_output_packet_frames = maxi(1, int(round(_output_sample_rate * _packet_duration_sec)))
 	_setup_bus()
+	_ensure_microphone_capture_player()
 	_track_existing_players()
 	get_tree().node_added.connect(_on_node_added)
 
@@ -312,6 +317,46 @@ func _on_node_added(node: Node) -> void:
 		var player := node as AudioStreamPlayer
 		if player.stream is AudioStreamVOIP and not _voip_players.has(player):
 			_voip_players.append(player)
+		if auto_capture_microphone and _is_microphone_capture_player(player) and player != _mic_capture_player:
+			_disable_internal_microphone_capture()
+
+
+func _ensure_microphone_capture_player() -> void:
+	if not auto_capture_microphone:
+		return
+
+	if _bus_idx == -1:
+		return
+
+	if _mic_capture_player != null and is_instance_valid(_mic_capture_player):
+		if not _mic_capture_player.playing:
+			_mic_capture_player.play()
+		return
+
+	_mic_capture_player = AudioStreamPlayer.new()
+	_mic_capture_player.name = "VOIPMicrophoneCapture"
+	_mic_capture_player.stream = AudioStreamMicrophone.new()
+	_mic_capture_player.bus = BUS_NAME
+	add_child(_mic_capture_player)
+	_mic_capture_player.play()
+
+
+func _disable_internal_microphone_capture() -> void:
+	if _mic_capture_player == null or not is_instance_valid(_mic_capture_player):
+		_mic_capture_player = null
+		return
+
+	_mic_capture_player.stop()
+	_mic_capture_player.queue_free()
+	_mic_capture_player = null
+
+
+func _is_microphone_capture_player(player: AudioStreamPlayer) -> bool:
+	if player == null:
+		return false
+	if not (player.stream is AudioStreamMicrophone):
+		return false
+	return player.bus == BUS_NAME
 
 
 func _track_existing_players() -> void:
