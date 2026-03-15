@@ -57,7 +57,7 @@ jobs:
           }
 
           $pluginCfgContent = Get-Content -Path $pluginCfgPath
-          $pluginCfgContent = $pluginCfgContent -replace '^version=".*"$', "version=\"$pluginVersion\""
+          $pluginCfgContent = $pluginCfgContent -replace '^version=".*"$', ('version="{0}"' -f $pluginVersion)
           Set-Content -Path $pluginCfgPath -Value $pluginCfgContent
 
           if (-not (Test-Path $releaseDll)) {
